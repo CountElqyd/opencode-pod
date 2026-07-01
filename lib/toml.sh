@@ -13,8 +13,6 @@ parse_toml() {
 
   local current_section=""
   local line_number=0
-  local in_array=false
-  local array_key=""
   local array_values=""
 
   while IFS= read -r line || [[ -n "$line" ]]; do
@@ -76,7 +74,7 @@ parse_toml() {
       printf -v "$varname" '%s' "$value"
       export "$varname"
     else
-      echo "Error: could not parse opencode-pod.toml at line ${line_number}: ${line}" >&2
+      echo "Error: could not parse ${config_file} at line ${line_number}: ${line}" >&2
       return 1
     fi
   done < "$config_file"
