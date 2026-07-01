@@ -100,3 +100,40 @@ EOF
   detect_distro "$TESTDIR/os-release"
   [[ "$DISTRO_SUBUID_SETUP" == "auto" ]]
 }
+
+@test "handles quoted ID=\"arch\" format" {
+  cat > "$TESTDIR/os-release" << 'EOF'
+ID="arch"
+EOF
+
+  source lib/distro.sh
+  detect_distro "$TESTDIR/os-release"
+  [ "$DISTRO_ID" = "arch" ]
+}
+
+@test "handles multi-line os-release" {
+  cat > "$TESTDIR/os-release" << 'EOF'
+NAME="Fedora Linux"
+VERSION="41 (Workstation Edition)"
+ID=fedora
+VERSION_ID=41
+PRETTY_NAME="Fedora Linux 41"
+EOF
+
+  source lib/distro.sh
+  detect_distro "$TESTDIR/os-release"
+  [ "$DISTRO_ID" = "fedora" ]
+  [[ "$DISTRO_INSTALL_CMD" == *"dnf"* ]]
+}
+
+@test "handles file with no ID line" {
+  cat > "$TESTDIR/os-release" << 'EOF'
+NAME="Something"
+VERSION="1.0"
+EOF
+
+  source lib/distro.sh
+  run detect_distro "$TESTDIR/os-release"
+  [ "$status" -eq 0 ]
+  [ "$DISTRO_ID" = "unknown" ]
+}
