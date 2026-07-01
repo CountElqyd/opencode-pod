@@ -20,15 +20,20 @@ parse_toml() {
 
     # Strip inline comments (but not inside strings)
     local stripped
-    stripped="$(echo "${line%%#*}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    stripped="$(printf '%s' "${line%%#*}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
 
     [[ -z "$stripped" ]] && continue
 
     # Section header
     if [[ "$stripped" =~ ^\[([^\]]+)\]$ ]]; then
       current_section="${BASH_REMATCH[1]}"
-      # Normalize dots to underscores for shell variable names
+      if [[ "$current_section" =~ [^a-zA-Z0-9_.-] ]]; then
+        echo "Error: invalid section name at line ${line_number}: [${current_section}]" >&2
+        return 1
+      fi
+      # Normalize dots and hyphens to underscores for shell variable names
       current_section="${current_section//./_}"
+      current_section="${current_section//-/_}"
       continue
     fi
 
@@ -40,7 +45,7 @@ parse_toml() {
       # Array value
       if [[ "$value" =~ ^\[(.*)\]$ ]]; then
         local inner="${BASH_REMATCH[1]}"
-        inner="$(echo "$inner" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+        inner="$(printf '%s' "$inner" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
         if [[ -z "$inner" ]]; then
           array_values=""
         else
@@ -48,7 +53,7 @@ parse_toml() {
           array_values=""
           IFS=',' read -ra elements <<< "$inner"
           for elem in "${elements[@]}"; do
-            elem="$(echo "$elem" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+            elem="$(printf '%s' "$elem" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
             elem="${elem#\"}"
             elem="${elem%\"}"
             array_values="${array_values}${array_values:+ }${elem}"
@@ -65,9 +70,9 @@ parse_toml() {
       # Boolean values remain as-is
       local varname
       if [[ -n "$current_section" ]]; then
-        varname="CONFIG_$(echo "${current_section}_${key}" | tr '[:lower:]' '[:upper:]')"
+        varname="CONFIG_$(printf '%s' "${current_section}_${key}" | tr '[:lower:]' '[:upper:]')"
       else
-        varname="CONFIG_$(echo "${key}" | tr '[:lower:]' '[:upper:]')"
+        varname="CONFIG_$(printf '%s' "${key}" | tr '[:lower:]' '[:upper:]')"
       fi
 
       # Use printf -v for safe variable assignment
