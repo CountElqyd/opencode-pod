@@ -286,7 +286,7 @@ container_create() {
   done < <(env | grep '^CONFIG_ENV_')
 
   args+=("${CONFIG_CONTAINER_IMAGE:-cgr.dev/chainguard/wolfi-base:latest}")
-  args+=(/bin/sh)
+  args+=(sleep infinity)
 
   if podman "${args[@]}" 2>"$stderr_file"; then
     rm -f "$stderr_file"
@@ -309,6 +309,8 @@ container_start() {
   if [[ "$CONTAINER_STATE" == "paused" ]] || [[ "$CONTAINER_STATE" == "exited" ]]; then
     printf '%s\n' "Starting existing container: $CONTAINER_NAME"
     podman start "$CONTAINER_NAME" || return 1
+    sleep 1
+    run_bootstrap
     podman exec -it "$CONTAINER_NAME" /usr/bin/zsh 2>/dev/null || podman exec -it "$CONTAINER_NAME" /bin/sh
     return 0
   fi
