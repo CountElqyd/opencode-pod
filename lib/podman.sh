@@ -174,7 +174,7 @@ mark_bootstrap_step() {
 fix_home_ownership() {
   local mountpoint
   mountpoint="$(podman volume inspect "$HOME_VOLUME" --format '{{.Mountpoint}}' 2>/dev/null)" || {
-    printf 'WARNING: could not resolve home volume mountpoint; skipping ownership fix\n' >&2
+    printf 'WARNING: could not resolve home volume mountpoint; ownership fix aborted\n' >&2
     return 1
   }
   if ! podman unshare chown -R 0:0 "$mountpoint"; then
@@ -248,6 +248,8 @@ run_bootstrap() {
         printf 'WARNING: failed to copy opencode config\n' >&2
       fi
     fi
+    # Always mark done — the example config is optional. Repeated failed
+    # attempts would just produce noise without changing the outcome.
     mark_bootstrap_step "$progress" "opencode_config_copied"
   fi
 

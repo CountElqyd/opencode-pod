@@ -767,7 +767,7 @@ EOF
   export -f podman
 
   run run_bootstrap
-  [[ "$output" == *"WARNING"*"opencode config"* ]]
+  [[ "$output" == *"failed to copy opencode config"* ]]
 }
 
 @test "container_start calls fix_home_ownership when reattaching to running container" {

@@ -434,7 +434,7 @@ opencode-pod upgrade       # check for stale base image, add new packages
 |--------|---------|-----|------|--------|----------|
 | CEO Review | `/plan-ceo-review` | Scope & strategy | 1 | CLEAN (2026-07-01) | SELECTIVE EXPANSION. 6 proposals, 5 accepted, 1 deferred. 0 unresolved. |
 | Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | CLEAN (2026-07-01) | 10 issues, 10 resolved. |
-| Implementation | — | — | — | DONE (2026-07-02) | 60 bats tests, 22 commits. All design decisions shipped. |
+| Implementation | — | — | — | DONE (2026-07-02) | 73 bats tests (unit) + 3 integration tests, 7 commits. All design decisions shipped. |
 
-- **STATUS:** IMPLEMENTED — 60 tests passing, ready for integration testing with real Podman
+- **STATUS:** IMPLEMENTED — 73 unit tests + 3 integration tests passing. Real Podman integration tests active.
 - **VERDICT:** CEO + ENG CLEARED — implementation complete
