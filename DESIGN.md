@@ -57,6 +57,7 @@ opencode-podman-setup/
 │   ├── podman.bats             # container lifecycle, setup, error classification, bootstrap tests
 │   ├── security.bats           # hardening flag verification
 │   └── install.bats            # installer file placement tests
+│   └── integration.bats        # real-podman tests (@slow, skipped without podman)
 ├── lib/
 │   ├── toml.sh                 # TOML parser + mtime-based caching
 │   ├── distro.sh               # OS/distro detection
@@ -388,17 +389,16 @@ opencode-pod upgrade       # check for stale base image, add new packages
 
 ## Testing Strategy
 
-- **bats** (Bash Automated Testing System) for unit tests (60 tests across 5 files):
+- **bats** (Bash Automated Testing System) for unit tests (73 tests across 6 files):
   - `bats/toml.bats` — TOML parser: valid configs, malformed TOML, missing sections, comment handling, edge cases, config caching
   - `bats/distro.bats` — distro detection: known OS IDs, unknown IDs, missing `/etc/os-release`, quoted IDs, multi-line files
   - `bats/podman.bats` — container lifecycle: resolve_project, container naming, container create flag assembly, error classification (all patterns + fallback), bootstrap checkpointing, setup idempotency
   - `bats/security.bats` — hardening flags, opencode config path
   - `bats/install.bats` — installer file placement
-- **Integration tests** with real Podman (marked `@slow` in bats, skipped in CI without Podman):
-  - Create container from Wolfi base, verify it starts
-  - Install packages via `apk add -U`, verify via `apk info -e`
-  - Setup/start/stop/destroy lifecycle
-  - Bootstrap checkpoint resume
+- **Integration tests** (`bats/integration.bats`) with real Podman, skipped automatically in CI or any environment without a usable `podman`:
+  - Dev user owns `/home/dev` after bootstrap (direct regression test for the `--cap-drop=ALL` / `CAP_CHOWN` ownership bug)
+  - Dev user can create OpenCode data directories without `EACCES`
+  - `fix_home_ownership` is idempotent (safe to run repeatedly)
 - **CI:** GitHub Actions runs `shellcheck` on all `.sh` files and `bats` unit tests.
 - **Release checklist:** manual test on Arch, Fedora, and Ubuntu 24.04 before tagging a release.
 
