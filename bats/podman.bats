@@ -117,3 +117,84 @@ EOF
 
   [[ "$AUTO_DETECTED_PROFILE" == "nodejs" ]]
 }
+
+@test "container_create assembles correct podman create command" {
+  cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
+[container]
+image = "cgr.dev/chainguard/wolfi-base:latest"
+user = "dev"
+packages = ["git", "nodejs"]
+
+[network]
+forward = [3000]
+
+[security]
+harden = true
+EOF
+
+  source lib/toml.sh
+  source lib/podman.sh
+  resolve_project "$TESTDIR/project"
+
+  local cmd
+  cmd="$(container_create_command)"
+  [[ "$cmd" == *"podman create"* ]]
+  [[ "$cmd" == *"--name ${CONTAINER_NAME}"* ]]
+  [[ "$cmd" == *"--volume ${HOME_VOLUME}:/home/dev"* ]]
+  [[ "$cmd" == *"--userns=keep-id"* ]]
+  [[ "$cmd" == *"--cap-drop=ALL"* ]]
+  [[ "$cmd" == *"--security-opt=no-new-privileges"* ]]
+  [[ "$cmd" == *"-p 127.0.0.1:3000:3000"* ]]
+}
+
+@test "container_create adds network mode when specified" {
+  cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
+[container]
+image = "wolfi-base"
+
+[network]
+mode = "none"
+EOF
+
+  source lib/toml.sh
+  source lib/podman.sh
+  resolve_project "$TESTDIR/project"
+
+  local cmd
+  cmd="$(container_create_command)"
+  [[ "$cmd" == *"--network=none"* ]]
+}
+
+@test "container_create defaults to network bridge" {
+  cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
+[container]
+image = "wolfi-base"
+EOF
+
+  source lib/toml.sh
+  source lib/podman.sh
+  resolve_project "$TESTDIR/project"
+
+  local cmd
+  cmd="$(container_create_command)"
+  [[ "$cmd" != *"--network=none"* ]]
+  [[ "$cmd" != *"--network=host"* ]]
+}
+
+@test "container_create adds extra mounts" {
+  cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
+[container]
+image = "wolfi-base"
+
+[mounts]
+extra = ["~/.npmrc:/home/dev/.npmrc:ro"]
+EOF
+
+  source lib/toml.sh
+  source lib/podman.sh
+  resolve_project "$TESTDIR/project"
+
+  local cmd
+  cmd="$(container_create_command)"
+  [[ "$cmd" == *"-v ${HOME}/.npmrc:/home/dev/.npmrc:ro"* ]]
+}
