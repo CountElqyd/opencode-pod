@@ -612,3 +612,74 @@ EOF
   [ "$status" -ne 0 ]
   [[ "$output" == *"WARNING"* ]]
 }
+
+@test "run_bootstrap calls fix_home_ownership at the end" {
+  mkdir -p "$TESTDIR/project"
+  cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
+[container]
+image = "wolfi-base"
+packages = ["git"]
+EOF
+
+  source lib/toml.sh
+  source lib/podman.sh
+  resolve_project "$TESTDIR/project"
+
+  podman() {
+    case "$1" in
+      start) return 0 ;;
+      exec) return 0 ;;
+      cp) return 0 ;;
+      volume)
+        if [[ "$2" == "inspect" ]]; then
+          printf '%s\n' "$TESTDIR/fake-mount"
+          return 0
+        fi
+        ;;
+      unshare)
+        printf '%s\n' "$*" >> "$TESTDIR/unshare_calls"
+        return 0
+        ;;
+    esac
+    return 0
+  }
+  export -f podman
+
+  run run_bootstrap
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Bootstrap complete"* ]]
+
+  local cmd
+  cmd="$(cat "$TESTDIR/unshare_calls")"
+  [[ "$cmd" == *"chown -R 0:0"* ]]
+  [[ "$cmd" == *"$TESTDIR/fake-mount"* ]]
+}
+
+@test "run_bootstrap reports incomplete when fix_home_ownership fails" {
+  mkdir -p "$TESTDIR/project"
+  cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
+[container]
+image = "wolfi-base"
+packages = ["git"]
+EOF
+
+  source lib/toml.sh
+  source lib/podman.sh
+  resolve_project "$TESTDIR/project"
+
+  podman() {
+    case "$1" in
+      start) return 0 ;;
+      exec) return 0 ;;
+      cp) return 0 ;;
+      volume) return 1 ;;
+    esac
+    return 0
+  }
+  export -f podman
+
+  run run_bootstrap
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"WARNING: could not resolve home volume mountpoint"* ]]
+  [[ "$output" == *"Bootstrap incomplete"* ]]
+}

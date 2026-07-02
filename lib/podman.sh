@@ -262,9 +262,13 @@ run_bootstrap() {
   rm -f "$progress"
 
   # Fix home dir ownership — all root-run steps (ssh_keygen, config_copy, npm -g)
-  # create root-owned files inside /home/dev. chown after ALL steps so dev can
-  # write to ~/.ssh, ~/.local, ~/.npm, ~/.cache at runtime.
-  podman exec "$CONTAINER_NAME" sh -c "chown -R 1000:1000 /home/dev" 2>/dev/null || true
+  # create root-owned files inside /home/dev. --cap-drop=ALL strips CAP_CHOWN,
+  # so this must run from the host side via podman unshare, not inside the
+  # container. Runs after ALL steps so dev can write to ~/.ssh, ~/.local,
+  # ~/.npm, ~/.cache at runtime.
+  if ! fix_home_ownership; then
+    completed_all=false
+  fi
 
   if ! $completed_all; then
     printf '%s\n' "Bootstrap incomplete. Re-run 'opencode-pod setup' to resume from checkpoint." >&2
