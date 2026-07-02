@@ -183,15 +183,25 @@ run_bootstrap() {
     printf '%s\n' "Installing packages: $packages"
     local apk_stderr
     apk_stderr="$(mktemp)"
-    if podman exec "$CONTAINER_NAME" apk add -U --no-cache $packages 2>"$apk_stderr"; then
-      rm -f "$apk_stderr"
+    podman exec "$CONTAINER_NAME" apk add -U --no-cache $packages 2>"$apk_stderr" || true
+    local stderr_text
+    stderr_text="$(cat "$apk_stderr")"
+    rm -f "$apk_stderr"
+
+    # Verify each package actually installed (apk exit code is unreliable due to triggers)
+    local missing=""
+    for pkg in $packages; do
+      if ! podman exec "$CONTAINER_NAME" apk info -e "$pkg" &>/dev/null; then
+        missing="${missing}${missing:+ }${pkg}"
+      fi
+    done
+
+    if [[ -z "$missing" ]]; then
       mark_bootstrap_step "$progress" "packages_installed"
     else
-      local rc=$?
-      local stderr_text
-      stderr_text="$(cat "$apk_stderr")"
-      rm -f "$apk_stderr"
-      classify_error "apk_add" "$rc" "$stderr_text" >&2
+      printf '%s\n' "$stderr_text" >&2
+      printf 'ERROR: Failed to install: %s\n' "$missing" >&2
+      classify_error "apk_add" 1 "$stderr_text" >&2
       completed_all=false
     fi
   fi
@@ -332,7 +342,7 @@ container_setup() {
 container_start() {
   if [[ "$CONTAINER_STATE" == "running" ]]; then
     printf '%s\n' "Reattaching to running container: $CONTAINER_NAME"
-    podman exec -it "$CONTAINER_NAME" /usr/bin/zsh 2>/dev/null || podman exec -it "$CONTAINER_NAME" /bin/sh
+    podman exec -it --workdir /workspace "$CONTAINER_NAME" /usr/bin/zsh 2>/dev/null || podman exec -it --workdir /workspace "$CONTAINER_NAME" /bin/sh
     return 0
   fi
 
@@ -341,7 +351,7 @@ container_start() {
     podman start "$CONTAINER_NAME" || return 1
     sleep 1
     run_bootstrap
-    podman exec -it "$CONTAINER_NAME" /usr/bin/zsh 2>/dev/null || podman exec -it "$CONTAINER_NAME" /bin/sh
+    podman exec -it --workdir /workspace "$CONTAINER_NAME" /usr/bin/zsh 2>/dev/null || podman exec -it --workdir /workspace "$CONTAINER_NAME" /bin/sh
     return 0
   fi
 
@@ -363,7 +373,7 @@ container_shell() {
     printf '%s\n' "Container is not running. Run 'opencode-pod start' first." >&2
     return 1
   fi
-  podman exec -it "$CONTAINER_NAME" /usr/bin/zsh 2>/dev/null || podman exec -it "$CONTAINER_NAME" /bin/sh
+  podman exec -it --workdir /workspace "$CONTAINER_NAME" /usr/bin/zsh 2>/dev/null || podman exec -it --workdir /workspace "$CONTAINER_NAME" /bin/sh
 }
 
 container_destroy() {

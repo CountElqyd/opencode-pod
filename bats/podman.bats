@@ -318,6 +318,77 @@ EOF
   [[ "$output" == *"already"* || "$output" == *"exists"* ]]
 }
 
+@test "bootstrap marks packages_installed despite apk exit 1" {
+  mkdir -p "$TESTDIR/project"
+  cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
+[container]
+image = "wolfi-base"
+packages = ["git", "zsh"]
+EOF
+
+  source lib/toml.sh
+  source lib/podman.sh
+  resolve_project "$TESTDIR/project"
+
+  podman() {
+    case "$1" in
+      start) return 0 ;;
+      exec)
+        if [[ "$2" == "$CONTAINER_NAME" && "$3" == "apk" && "$4" == "add" ]]; then
+          return 1
+        fi
+        if [[ "$2" == "$CONTAINER_NAME" && "$3" == "apk" && "$4" == "info" ]]; then
+          return 0
+        fi
+        return 0
+        ;;
+      cp) return 0 ;;
+    esac
+    return 0
+  }
+  export -f podman
+
+  run run_bootstrap
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Bootstrap complete"* ]]
+}
+
+@test "bootstrap reports missing packages" {
+  mkdir -p "$TESTDIR/project"
+  cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
+[container]
+image = "wolfi-base"
+packages = ["git", "nonexistent-pkg"]
+EOF
+
+  source lib/toml.sh
+  source lib/podman.sh
+  resolve_project "$TESTDIR/project"
+
+  podman() {
+    case "$1" in
+      start) return 0 ;;
+      exec)
+        if [[ "$2" == "$CONTAINER_NAME" && "$3" == "apk" && "$4" == "add" ]]; then
+          return 1
+        fi
+        if [[ "$2" == "$CONTAINER_NAME" && "$3" == "apk" && "$4" == "info" ]]; then
+          [[ "$6" == "nonexistent-pkg" ]] && return 1
+          return 0
+        fi
+        return 0
+        ;;
+      cp) return 0 ;;
+    esac
+    return 0
+  }
+  export -f podman
+
+  run run_bootstrap
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"nonexistent-pkg"* ]]
+}
+
 @test "container_start reattaches to running container after setup" {
   mkdir -p "$TESTDIR/project"
   cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
