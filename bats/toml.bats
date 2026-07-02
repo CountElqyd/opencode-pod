@@ -166,3 +166,55 @@ EOF
 
   [ "$CONFIG_CONTAINER_NETWORK_MODE" = "bridge" ]
 }
+
+@test "config cache is created on first parse" {
+  cat > "$TESTDIR/config.toml" << 'EOF'
+[container]
+image = "wolfi-base"
+EOF
+
+  CACHE_DIR="$TESTDIR/cache"
+  source lib/toml.sh
+  parse_toml "$TESTDIR/config.toml"
+
+  [ -f "$CACHE_DIR/opencode-pod-config"* ]
+}
+
+@test "config cache invalidates on mtime change" {
+  cat > "$TESTDIR/config.toml" << 'EOF'
+[container]
+image = "wolfi-base"
+EOF
+
+  CACHE_DIR="$TESTDIR/cache"
+  source lib/toml.sh
+  parse_toml "$TESTDIR/config.toml"
+  local cache_file
+  cache_file="$(ls -t "$CACHE_DIR"/opencode-pod-config-* 2>/dev/null | head -1)"
+  local first_mtime
+  first_mtime="$(head -n 1 "$cache_file")"
+
+  sleep 1
+  echo "# changed" >> "$TESTDIR/config.toml"
+  parse_toml "$TESTDIR/config.toml"
+  local second_mtime
+  second_mtime="$(head -n 1 "$cache_file")"
+
+  [ "$first_mtime" != "$second_mtime" ]
+}
+
+@test "config cache is sourced on re-parse" {
+  cat > "$TESTDIR/config.toml" << 'EOF'
+[container]
+image = "wolfi-base"
+user = "dev"
+EOF
+
+  CACHE_DIR="$TESTDIR/cache"
+  source lib/toml.sh
+  parse_toml "$TESTDIR/config.toml"
+  [ "$CONFIG_CONTAINER_IMAGE" = "wolfi-base" ]
+
+  parse_toml "$TESTDIR/config.toml"
+  [ "$CONFIG_CONTAINER_IMAGE" = "wolfi-base" ]
+}
