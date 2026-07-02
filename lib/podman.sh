@@ -249,6 +249,11 @@ run_bootstrap() {
   podman cp "$progress" "$CONTAINER_NAME:${BOOTSTRAP_PROGRESS_FILE}" 2>/dev/null || true
   rm -f "$progress"
 
+  # Fix home dir ownership — all root-run steps (ssh_keygen, config_copy, npm -g)
+  # create root-owned files inside /home/dev. chown after ALL steps so dev can
+  # write to ~/.ssh, ~/.local, ~/.npm, ~/.cache at runtime.
+  podman exec "$CONTAINER_NAME" sh -c "chown -R 1000:1000 /home/dev" 2>/dev/null || true
+
   if ! $completed_all; then
     printf '%s\n' "Bootstrap incomplete. Re-run 'opencode-pod setup' to resume from checkpoint." >&2
     printf '%s\n' "Or use --force-recreate to destroy and start fresh." >&2
