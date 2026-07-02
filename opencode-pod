@@ -6,6 +6,13 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LIB_DIR="${SCRIPT_DIR}/lib"
+DEFAULTS_DIR="${SCRIPT_DIR}/defaults"
+
+if [[ ! -d "$LIB_DIR" ]]; then
+  LIB_DIR="$HOME/.local/share/opencode-pod/lib"
+  DEFAULTS_DIR="$HOME/.local/share/opencode-pod/defaults"
+fi
+
 export OPCODE_POD_LIB_DIR="${LIB_DIR}"
 
 source "${LIB_DIR}/toml.sh"
@@ -51,7 +58,7 @@ cmd_init() {
     return 1
   fi
 
-  local default_config="${SCRIPT_DIR}/defaults/opencode-pod.toml"
+  local default_config="${DEFAULTS_DIR}/opencode-pod.toml"
   if [[ -f "$default_config" ]]; then
     cp "$default_config" "$config_file"
     printf 'Created opencode-pod.toml with defaults.\n'
