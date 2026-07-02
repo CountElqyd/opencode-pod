@@ -210,7 +210,7 @@ run_bootstrap() {
     printf '%s\n' "Creating user: dev"
     local host_uid
     host_uid="$(id -u)"
-    if ! podman exec "$CONTAINER_NAME" sh -c "id dev 2>/dev/null || adduser -D -u ${host_uid} dev"; then
+    if ! podman exec "$CONTAINER_NAME" sh -c "id dev 2>/dev/null || ( n=\$(id -un 1000 2>/dev/null) && userdel \"\$n\" 2>/dev/null; adduser -D -u 1000 dev)"; then
       printf '%s\n' "Failed to create dev user. Container may need --force-recreate." >&2
       completed_all=false
     else
@@ -240,7 +240,7 @@ run_bootstrap() {
 
   if ! is_bootstrap_step_done "$progress" "opencode_installed"; then
     printf '%s\n' "Installing opencode..."
-    if podman exec -u dev -w /home/dev "$CONTAINER_NAME" npm install -g @anthropic-ai/opencode 2>/dev/null; then
+    if podman exec -u dev -w /home/dev "$CONTAINER_NAME" npm install -g opencode-ai; then
       mark_bootstrap_step "$progress" "opencode_installed"
     else
       printf '%s\n' "Failed to install opencode. Check network access." >&2
@@ -352,7 +352,7 @@ container_setup() {
 container_start() {
   if [[ "$CONTAINER_STATE" == "running" ]]; then
     printf '%s\n' "Reattaching to running container: $CONTAINER_NAME"
-    podman exec -it --workdir /workspace "$CONTAINER_NAME" /usr/bin/zsh 2>/dev/null || podman exec -it --workdir /workspace "$CONTAINER_NAME" /bin/sh
+    podman exec -it -u dev --workdir /workspace "$CONTAINER_NAME" /usr/bin/zsh 2>/dev/null || podman exec -it -u dev --workdir /workspace "$CONTAINER_NAME" /bin/sh
     return 0
   fi
 
@@ -361,7 +361,7 @@ container_start() {
     podman start "$CONTAINER_NAME" || return 1
     sleep 1
     run_bootstrap
-    podman exec -it --workdir /workspace "$CONTAINER_NAME" /usr/bin/zsh 2>/dev/null || podman exec -it --workdir /workspace "$CONTAINER_NAME" /bin/sh
+    podman exec -it -u dev --workdir /workspace "$CONTAINER_NAME" /usr/bin/zsh 2>/dev/null || podman exec -it -u dev --workdir /workspace "$CONTAINER_NAME" /bin/sh
     return 0
   fi
 
@@ -383,7 +383,7 @@ container_shell() {
     printf '%s\n' "Container is not running. Run 'opencode-pod start' first." >&2
     return 1
   fi
-  podman exec -it --workdir /workspace "$CONTAINER_NAME" /usr/bin/zsh 2>/dev/null || podman exec -it --workdir /workspace "$CONTAINER_NAME" /bin/sh
+  podman exec -it -u dev --workdir /workspace "$CONTAINER_NAME" /usr/bin/zsh 2>/dev/null || podman exec -it -u dev --workdir /workspace "$CONTAINER_NAME" /bin/sh
 }
 
 container_destroy() {

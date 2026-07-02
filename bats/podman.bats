@@ -518,3 +518,25 @@ EOF
   [ "$status" -eq 0 ]
   [[ "$output" == *"Reattaching"* ]]
 }
+
+@test "container_start execs as dev user" {
+  source lib/podman.sh
+  CONTAINER_NAME="test"
+  CONTAINER_STATE="running"
+  podman() { printf '%s\n' "$*" > "$TESTDIR/podman_args"; return 0; }
+  container_start
+  local cmd
+  cmd="$(cat "$TESTDIR/podman_args")"
+  [[ "$cmd" == *"-u dev"* ]]
+}
+
+@test "container_shell execs as dev user" {
+  source lib/podman.sh
+  CONTAINER_NAME="test"
+  CONTAINER_STATE="running"
+  podman() { printf '%s\n' "$*" > "$TESTDIR/podman_args"; return 0; }
+  container_shell
+  local cmd
+  cmd="$(cat "$TESTDIR/podman_args")"
+  [[ "$cmd" == *"-u dev"* ]]
+}

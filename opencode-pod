@@ -89,20 +89,6 @@ TOML
 }
 
 cmd_start() {
-  local force_recreate=false
-  if [[ "${1:-}" == "--force-recreate" ]]; then
-    force_recreate=true
-  fi
-
-  if $force_recreate; then
-    resolve_project || return 1
-    container_destroy 2>/dev/null || true
-    CONTAINER_STATE="nonexistent"
-    cmd_setup
-    container_start
-    return $?
-  fi
-
   resolve_project || return 1
 
   if [[ -n "${AUTO_DETECTED_PROFILE:-}" ]]; then
@@ -147,6 +133,12 @@ TOML
 }
 
 cmd_setup() {
+  if [[ "${1:-}" == "--force-recreate" ]]; then
+    resolve_project || return 1
+    container_destroy 2>/dev/null || true
+    CONTAINER_STATE="nonexistent"
+  fi
+
   resolve_project || return 1
 
   if ! command -v podman &>/dev/null; then
