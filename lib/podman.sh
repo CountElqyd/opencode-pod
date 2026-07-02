@@ -179,7 +179,7 @@ run_bootstrap() {
   local completed_all=true
 
   if ! is_bootstrap_step_done "$progress" "packages_installed"; then
-    local packages="${CONFIG_CONTAINER_PACKAGES:-git openssh curl}"
+    local packages="${CONFIG_CONTAINER_PACKAGES:-git openssh curl} nodejs npm"
     printf '%s\n' "Installing packages: $packages"
     local apk_stderr
     apk_stderr="$(mktemp)"
@@ -238,11 +238,21 @@ run_bootstrap() {
     mark_bootstrap_step "$progress" "opencode_config_copied"
   fi
 
+  if ! is_bootstrap_step_done "$progress" "opencode_installed"; then
+    printf '%s\n' "Installing opencode..."
+    if podman exec -u dev -w /home/dev "$CONTAINER_NAME" npm install -g @anthropic-ai/opencode 2>/dev/null; then
+      mark_bootstrap_step "$progress" "opencode_installed"
+    else
+      printf '%s\n' "Failed to install opencode. Check network access." >&2
+      completed_all=false
+    fi
+  fi
+
   podman cp "$progress" "$CONTAINER_NAME:${BOOTSTRAP_PROGRESS_FILE}" 2>/dev/null || true
   rm -f "$progress"
 
   if ! $completed_all; then
-    printf '%s\n' "Bootstrap incomplete. Re-run 'opencode-pod start' to resume from checkpoint." >&2
+    printf '%s\n' "Bootstrap incomplete. Re-run 'opencode-pod setup' to resume from checkpoint." >&2
     printf '%s\n' "Or use --force-recreate to destroy and start fresh." >&2
     return 1
   fi

@@ -389,6 +389,114 @@ EOF
   [[ "$output" == *"nonexistent-pkg"* ]]
 }
 
+@test "bootstrap installs opencode via npm" {
+  mkdir -p "$TESTDIR/project"
+  cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
+[container]
+image = "wolfi-base"
+packages = ["git"]
+EOF
+
+  source lib/toml.sh
+  source lib/podman.sh
+  resolve_project "$TESTDIR/project"
+
+  podman() {
+    case "$1" in
+      start) return 0 ;;
+      exec)
+        if [[ "$*" == *"id dev"* ]]; then return 0; fi
+        if [[ "$*" == *"ssh-keygen"* ]]; then return 0; fi
+        if [[ "$*" == *"apk"* ]]; then return 0; fi
+        if [[ "$*" == *"npm install"* ]]; then return 0; fi
+        return 0
+        ;;
+      cp) return 0 ;;
+    esac
+    return 0
+  }
+  export -f podman
+
+  run run_bootstrap
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Installing opencode"* ]]
+  [[ "$output" == *"Bootstrap complete"* ]]
+}
+
+@test "bootstrap opencode step is skipped if already done" {
+  mkdir -p "$TESTDIR/project"
+  cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
+[container]
+image = "wolfi-base"
+packages = ["git"]
+EOF
+
+  source lib/toml.sh
+  source lib/podman.sh
+  resolve_project "$TESTDIR/project"
+
+  # Pre-populate progress file with all steps done including opencode
+  local progress="/tmp/.bootstrap-progress-${CONTAINER_NAME}"
+  printf 'packages_installed\nuser_created\nssh_key_generated\nopencode_config_copied\nopencode_installed\n' > "$progress"
+
+  podman() {
+    case "$1" in
+      start) return 0 ;;
+      cp)
+        if [[ "$*" == *".bootstrap-progress" ]]; then
+          mkdir -p "$(dirname "$3")" 2>/dev/null || true
+          cp "$progress" "$3"
+        fi
+        return 0
+        ;;
+      exec) return 0 ;;
+    esac
+    return 0
+  }
+  export -f podman
+
+  run run_bootstrap
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"Installing opencode"* ]]
+  [[ "$output" == *"Bootstrap complete"* ]]
+
+  rm -f "$progress"
+}
+
+@test "bootstrap opencode failure is handled" {
+  mkdir -p "$TESTDIR/project"
+  cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
+[container]
+image = "wolfi-base"
+packages = ["git"]
+EOF
+
+  source lib/toml.sh
+  source lib/podman.sh
+  resolve_project "$TESTDIR/project"
+
+  podman() {
+    case "$1" in
+      start) return 0 ;;
+      exec)
+        if [[ "$*" == *"id dev"* ]]; then return 0; fi
+        if [[ "$*" == *"ssh-keygen"* ]]; then return 0; fi
+        if [[ "$*" == *"apk info"* ]]; then return 0; fi
+        if [[ "$*" == *"npm"* ]]; then return 1; fi
+        return 0
+        ;;
+      cp) return 0 ;;
+    esac
+    return 0
+  }
+  export -f podman
+
+  run run_bootstrap
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Bootstrap incomplete"* ]]
+  [[ "$output" == *"opencode"* ]]
+}
+
 @test "container_start reattaches to running container after setup" {
   mkdir -p "$TESTDIR/project"
   cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
