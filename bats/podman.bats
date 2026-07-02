@@ -119,6 +119,7 @@ EOF
 }
 
 @test "container_create assembles correct podman create command" {
+  mkdir -p "$TESTDIR/project"
   cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
 [container]
 image = "cgr.dev/chainguard/wolfi-base:latest"
@@ -151,6 +152,7 @@ EOF
 }
 
 @test "container_create adds network mode when specified" {
+  mkdir -p "$TESTDIR/project"
   cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
 [container]
 image = "wolfi-base"
@@ -172,6 +174,7 @@ EOF
 }
 
 @test "container_create defaults to network bridge" {
+  mkdir -p "$TESTDIR/project"
   cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
 [container]
 image = "wolfi-base"
@@ -191,6 +194,7 @@ EOF
 }
 
 @test "container_create adds extra mounts" {
+  mkdir -p "$TESTDIR/project"
   cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
 [container]
 image = "wolfi-base"
@@ -269,4 +273,69 @@ EOF
   grep -q "packages_installed" "$tmpfile"
 
   rm -f "$tmpfile"
+}
+
+# --- setup command ---
+
+@test "container_start errors when container not set up" {
+  mkdir -p "$TESTDIR/project"
+  cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
+[container]
+image = "wolfi-base"
+EOF
+
+  source lib/toml.sh
+  source lib/podman.sh
+  resolve_project "$TESTDIR/project"
+
+  run container_start 2>&1
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"not set up"* || "$output" == *"No container"* ]]
+}
+
+@test "container_setup function exists" {
+  source lib/podman.sh
+  type container_setup >/dev/null 2>&1
+  [ "$?" -eq 0 ] || [ "$(type -t container_setup)" = "function" ]
+}
+
+@test "container_setup skips when container already exists and running" {
+  mkdir -p "$TESTDIR/project"
+  cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
+[container]
+image = "wolfi-base"
+EOF
+
+  source lib/toml.sh
+  source lib/podman.sh
+  resolve_project "$TESTDIR/project"
+
+  # Simulate container already exists
+  CONTAINER_STATE="running"
+
+  run container_setup 2>&1
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"already"* || "$output" == *"exists"* ]]
+}
+
+@test "container_start reattaches to running container after setup" {
+  mkdir -p "$TESTDIR/project"
+  cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
+[container]
+image = "wolfi-base"
+EOF
+
+  source lib/toml.sh
+  source lib/podman.sh
+  resolve_project "$TESTDIR/project"
+
+  # Force state to running
+  CONTAINER_STATE="running"
+
+  podman() { return 0; }
+  export -f podman
+
+  run container_start 2>&1
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Reattaching"* ]]
 }

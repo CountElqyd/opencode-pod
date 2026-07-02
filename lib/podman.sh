@@ -299,6 +299,36 @@ container_create() {
   fi
 }
 
+container_setup() {
+  if [[ "$CONTAINER_STATE" == "running" ]]; then
+    printf '%s\n' "Container already set up and running: $CONTAINER_NAME"
+    return 0
+  fi
+
+  if [[ "$CONTAINER_STATE" != "nonexistent" ]]; then
+    printf '%s\n' "Container already exists (state: $CONTAINER_STATE). Use 'opencode-pod start' to reattach." >&2
+    return 0
+  fi
+
+  printf '%s\n' "Setting up container: $CONTAINER_NAME"
+  podman volume create "$HOME_VOLUME" 2>/dev/null || true
+
+  local stderr_file
+  if ! stderr_file="$(container_create)"; then
+    local rc=$?
+    local stderr_text=""
+    [[ -f "$stderr_file" ]] && stderr_text="$(cat "$stderr_file")" && rm -f "$stderr_file"
+    classify_error "podman_create" "$rc" "$stderr_text" >&2
+    return $rc
+  fi
+
+  podman start "$CONTAINER_NAME" || return 1
+
+  run_bootstrap
+
+  printf '%s\n' "Container ready. Run 'opencode-pod start' to enter."
+}
+
 container_start() {
   if [[ "$CONTAINER_STATE" == "running" ]]; then
     printf '%s\n' "Reattaching to running container: $CONTAINER_NAME"
@@ -315,23 +345,8 @@ container_start() {
     return 0
   fi
 
-  printf '%s\n' "Creating container: $CONTAINER_NAME"
-  podman volume create "$HOME_VOLUME" 2>/dev/null || true
-
-  local stderr_file
-  if ! stderr_file="$(container_create)"; then
-    local rc=$?
-    local stderr_text=""
-    [[ -f "$stderr_file" ]] && stderr_text="$(cat "$stderr_file")" && rm -f "$stderr_file"
-    classify_error "podman_create" "$rc" "$stderr_text" >&2
-    return $rc
-  fi
-
-  podman start "$CONTAINER_NAME" || return 1
-
-  run_bootstrap
-
-  podman exec -it "$CONTAINER_NAME" /usr/bin/zsh 2>/dev/null || podman exec -it "$CONTAINER_NAME" /bin/sh
+  printf '%s\n' "Container not set up. Run 'opencode-pod setup' first." >&2
+  return 1
 }
 
 container_stop() {

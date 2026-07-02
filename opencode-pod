@@ -25,8 +25,9 @@ usage() {
 Usage: opencode-pod <command> [options]
 
 Commands:
-  init       Create opencode-pod.toml (interactive)
-  start      Build + start container, drop into zsh
+  init       Create opencode-pod.toml (offline, instant)
+  setup      Pull image, create container, install packages (one-time, ~60s)
+  start      Enter container shell (instant)
   stop       Stop container, preserve installed tools
   shell      Open new shell into running container
   destroy    Remove container + home volume
@@ -97,9 +98,12 @@ cmd_start() {
     resolve_project || return 1
     container_destroy 2>/dev/null || true
     CONTAINER_STATE="nonexistent"
-  else
-    resolve_project || return 1
+    cmd_setup
+    container_start
+    return $?
   fi
+
+  resolve_project || return 1
 
   if [[ -n "${AUTO_DETECTED_PROFILE:-}" ]]; then
     printf 'Detected %s project.\n' "$AUTO_DETECTED_PROFILE"
@@ -134,7 +138,16 @@ http = false
 harden = true
 TOML
     resolve_project || return 1
+    cmd_setup
+    container_start
+    return $?
   fi
+
+  container_start
+}
+
+cmd_setup() {
+  resolve_project || return 1
 
   if ! command -v podman &>/dev/null; then
     classify_error "podman_not_found" 0 ""
@@ -150,7 +163,7 @@ TOML
     fi
   fi
 
-  container_start
+  container_setup
 }
 
 cmd_stop() {
@@ -295,6 +308,7 @@ cmd_upgrade() {
 case "${1:-}" in
   init)     shift; cmd_init "$@" ;;
   start)    shift; cmd_start "$@" ;;
+  setup)    shift; cmd_setup "$@" ;;  
   stop)     shift; cmd_stop "$@" ;;
   shell)    shift; cmd_shell "$@" ;;
   destroy)  shift; cmd_destroy "$@" ;;
