@@ -171,6 +171,18 @@ mark_bootstrap_step() {
   printf '%s\n' "$step" >> "$progress_file"
 }
 
+fix_home_ownership() {
+  local mountpoint
+  mountpoint="$(podman volume inspect "$HOME_VOLUME" --format '{{.Mountpoint}}' 2>/dev/null)" || {
+    printf 'WARNING: could not resolve home volume mountpoint; skipping ownership fix\n' >&2
+    return 1
+  }
+  if ! podman unshare chown -R 0:0 "$mountpoint"; then
+    printf 'WARNING: failed to fix home directory ownership (dev user may lack write access)\n' >&2
+    return 1
+  fi
+}
+
 run_bootstrap() {
   local progress="/tmp/.bootstrap-progress-${CONTAINER_NAME}"
   podman cp "$CONTAINER_NAME:${BOOTSTRAP_PROGRESS_FILE}" "$progress" 2>/dev/null || true

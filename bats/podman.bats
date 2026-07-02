@@ -540,3 +540,75 @@ EOF
   cmd="$(cat "$TESTDIR/podman_args")"
   [[ "$cmd" == *"-u dev"* ]]
 }
+
+# --- fix_home_ownership ---
+
+@test "fix_home_ownership resolves mountpoint and chowns via podman unshare" {
+  source lib/podman.sh
+  HOME_VOLUME="test-home-volume"
+
+  podman() {
+    case "$1" in
+      volume)
+        if [[ "$2" == "inspect" ]]; then
+          printf '%s\n' "/fake/mountpoint/path"
+          return 0
+        fi
+        ;;
+      unshare)
+        printf '%s\n' "$*" > "$TESTDIR/unshare_args"
+        return 0
+        ;;
+    esac
+    return 0
+  }
+  export -f podman
+
+  run fix_home_ownership
+  [ "$status" -eq 0 ]
+
+  local cmd
+  cmd="$(cat "$TESTDIR/unshare_args")"
+  [[ "$cmd" == *"chown -R 0:0"* ]]
+  [[ "$cmd" == *"/fake/mountpoint/path"* ]]
+}
+
+@test "fix_home_ownership warns and fails when volume inspect fails" {
+  source lib/podman.sh
+  HOME_VOLUME="test-home-volume"
+
+  podman() {
+    case "$1" in
+      volume) return 1 ;;
+    esac
+    return 0
+  }
+  export -f podman
+
+  run fix_home_ownership
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"WARNING"* ]]
+}
+
+@test "fix_home_ownership warns and fails when podman unshare chown fails" {
+  source lib/podman.sh
+  HOME_VOLUME="test-home-volume"
+
+  podman() {
+    case "$1" in
+      volume)
+        if [[ "$2" == "inspect" ]]; then
+          printf '%s\n' "/fake/mountpoint/path"
+          return 0
+        fi
+        ;;
+      unshare) return 1 ;;
+    esac
+    return 0
+  }
+  export -f podman
+
+  run fix_home_ownership
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"WARNING"* ]]
+}
