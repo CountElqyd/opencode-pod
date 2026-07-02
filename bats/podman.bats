@@ -769,3 +769,33 @@ EOF
   run run_bootstrap
   [[ "$output" == *"WARNING"*"opencode config"* ]]
 }
+
+@test "container_start calls fix_home_ownership when reattaching to running container" {
+  source lib/podman.sh
+  CONTAINER_NAME="test"
+  HOME_VOLUME="test-home"
+  CONTAINER_STATE="running"
+
+  podman() {
+    case "$1" in
+      volume)
+        [[ "$2" == "inspect" ]] && printf '%s\n' "$TESTDIR/fake-mount"
+        return 0
+        ;;
+      unshare)
+        printf '%s\n' "$*" > "$TESTDIR/unshare_args"
+        return 0
+        ;;
+      exec) return 0 ;;
+    esac
+    return 0
+  }
+  export -f podman
+
+  run container_start
+  [ "$status" -eq 0 ]
+
+  local cmd
+  cmd="$(cat "$TESTDIR/unshare_args")"
+  [[ "$cmd" == *"chown -R 0:0"* ]]
+}

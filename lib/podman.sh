@@ -374,6 +374,7 @@ container_setup() {
 container_start() {
   if [[ "$CONTAINER_STATE" == "running" ]]; then
     printf '%s\n' "Reattaching to running container: $CONTAINER_NAME"
+    fix_home_ownership || true
     podman exec -it -u dev --workdir /workspace "$CONTAINER_NAME" /usr/bin/zsh 2>/dev/null || podman exec -it -u dev --workdir /workspace "$CONTAINER_NAME" /bin/sh
     return 0
   fi
