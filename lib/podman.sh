@@ -239,6 +239,9 @@ run_bootstrap() {
     mark_bootstrap_step "$progress" "opencode_config_copied"
   fi
 
+  # chown again — ssh_keygen and config_copy ran as root since user_created
+  podman exec "$CONTAINER_NAME" sh -c "chown -R 1000:1000 /home/dev" 2>/dev/null || true
+
   if ! is_bootstrap_step_done "$progress" "opencode_installed"; then
     printf '%s\n' "Installing opencode..."
     if podman exec -u dev -w /home/dev "$CONTAINER_NAME" npm install -g opencode-ai; then
