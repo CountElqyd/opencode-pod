@@ -173,7 +173,7 @@ mark_bootstrap_step() {
 
 run_bootstrap() {
   local progress="/tmp/.bootstrap-progress-${CONTAINER_NAME}"
-  rm -f "$progress"
+  podman cp "$CONTAINER_NAME:${BOOTSTRAP_PROGRESS_FILE}" "$progress" 2>/dev/null || true
   touch "$progress"
 
   local completed_all=true
@@ -181,11 +181,18 @@ run_bootstrap() {
   if ! is_bootstrap_step_done "$progress" "packages_installed"; then
     local packages="${CONFIG_CONTAINER_PACKAGES:-git openssh curl}"
     printf '%s\n' "Installing packages: $packages"
-    if ! podman exec "$CONTAINER_NAME" apk add --no-cache $packages; then
-      classify_error "apk_add" "$?" "" >&2
-      completed_all=false
-    else
+    local apk_stderr
+    apk_stderr="$(mktemp)"
+    if podman exec "$CONTAINER_NAME" apk add --no-cache $packages 2>"$apk_stderr"; then
+      rm -f "$apk_stderr"
       mark_bootstrap_step "$progress" "packages_installed"
+    else
+      local rc=$?
+      local stderr_text
+      stderr_text="$(cat "$apk_stderr")"
+      rm -f "$apk_stderr"
+      classify_error "apk_add" "$rc" "$stderr_text" >&2
+      completed_all=false
     fi
   fi
 
@@ -235,6 +242,9 @@ run_bootstrap() {
 }
 
 container_create() {
+  local stderr_file
+  stderr_file="$(mktemp)"
+
   local -a args=()
   args+=(create)
   args+=(--name "$CONTAINER_NAME")
@@ -278,7 +288,15 @@ container_create() {
   args+=("${CONFIG_CONTAINER_IMAGE:-cgr.dev/chainguard/wolfi-base:latest}")
   args+=(/bin/sh)
 
-  podman "${args[@]}"
+  if podman "${args[@]}" 2>"$stderr_file"; then
+    rm -f "$stderr_file"
+    return 0
+  else
+    local rc=$?
+    cat "$stderr_file" >&2
+    printf '%s' "$stderr_file"
+    return $rc
+  fi
 }
 
 container_start() {
@@ -298,9 +316,12 @@ container_start() {
   printf '%s\n' "Creating container: $CONTAINER_NAME"
   podman volume create "$HOME_VOLUME" 2>/dev/null || true
 
-  if ! container_create; then
+  local stderr_file
+  if ! stderr_file="$(container_create)"; then
     local rc=$?
-    classify_error "podman_create" "$rc" "" >&2
+    local stderr_text=""
+    [[ -f "$stderr_file" ]] && stderr_text="$(cat "$stderr_file")" && rm -f "$stderr_file"
+    classify_error "podman_create" "$rc" "$stderr_text" >&2
     return $rc
   fi
 
