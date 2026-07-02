@@ -208,7 +208,7 @@ run_bootstrap() {
 
   if ! is_bootstrap_step_done "$progress" "user_created"; then
     printf '%s\n' "Creating user: dev"
-    if ! podman exec "$CONTAINER_NAME" sh -c "id dev 2>/dev/null || ( n=\$(awk -F: '\$3==1000{print \$1}' /etc/passwd) && [ -n \"\$n\" ] && sed -i \"/^\$n:/d\" /etc/passwd; adduser -D -u 1000 dev)"; then
+    if ! podman exec "$CONTAINER_NAME" sh -c "id dev 2>/dev/null || ( sed -i '/^[^:]*:[^:]*:1000:/d' /etc/passwd && sed -i '/^[^:]*:[^:]*:1000:/d' /etc/group && adduser -D -u 1000 dev)"; then
       printf '%s\n' "Failed to create dev user. Container may need --force-recreate." >&2
       completed_all=false
     else
