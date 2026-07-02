@@ -279,7 +279,7 @@ cmd_upgrade() {
     for pkg in $toml_packages; do
       if ! printf '%s' "$installed" | grep -qxF "$pkg"; then
         printf 'Installing new package: %s\n' "$pkg"
-        podman exec "$CONTAINER_NAME" apk add --no-cache "$pkg"
+        podman exec "$CONTAINER_NAME" apk add -U --no-cache "$pkg"
       fi
     done
     for installed_pkg in $installed; do

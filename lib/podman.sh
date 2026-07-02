@@ -183,7 +183,7 @@ run_bootstrap() {
     printf '%s\n' "Installing packages: $packages"
     local apk_stderr
     apk_stderr="$(mktemp)"
-    if podman exec "$CONTAINER_NAME" apk add --no-cache $packages 2>"$apk_stderr"; then
+    if podman exec "$CONTAINER_NAME" apk add -U --no-cache $packages 2>"$apk_stderr"; then
       rm -f "$apk_stderr"
       mark_bootstrap_step "$progress" "packages_installed"
     else
