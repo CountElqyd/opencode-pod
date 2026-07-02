@@ -1,0 +1,25 @@
+# opencode-pod.toml — annotated example with all options
+# Copy this to your project root and customize.
+
+[container]
+# name = "my-api"          # Optional custom name (default: directory name)
+image = "cgr.dev/chainguard/wolfi-base:latest"
+packages = ["nodejs", "npm", "python3", "uv", "git", "openssh"]
+user = "dev"
+
+[mounts]
+# Mount host .npmrc as read-only for private registry access
+extra = ["~/.npmrc:/home/dev/.npmrc:ro"]
+
+[env]
+# These are visible inside the container at /workspace/opencode-pod.toml
+# For secrets, use: printf "sk-xxx" | podman secret create openai-key -
+NODE_ENV = "development"
+
+[network]
+mode = "bridge"            # "bridge" (internet) or "none" (isolated)
+forward = [3000, 8080]     # Ports accessible from host
+
+[security]
+http = false               # Block HTTP in opencode permissions
+harden = true              # Enable seccomp, cap-drop, no-new-privileges

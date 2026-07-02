@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "read": {
+      "deny": [
+        "~/.local/share/opencode/auth.json",
+        "~/.ssh/*",
+        "~/.aws/*",
+        "*.pem",
+        "*.key",
+        ".env",
+        "/home/dev/.local/share/opencode/auth.json"
+      ]
+    },
+    "edit": {
+      "deny": [
+        "~/.ssh/*",
+        "~/.aws/*",
+        "*.pem",
+        "*.key",
+        "~/.local/share/opencode/auth.json"
+      ]
+    },
+    "bash": {
+      "deny": ["curl", "wget"]
+    }
+  }
+}
