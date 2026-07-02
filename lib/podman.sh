@@ -242,8 +242,11 @@ run_bootstrap() {
     printf '%s\n' "Copying OpenCode config..."
     local example_config="${OPCODE_POD_LIB_DIR:-$HOME/.local/share/opencode-pod}/../example/opencode.json"
     if [[ -f "$example_config" ]]; then
-      podman cp "$example_config" "$CONTAINER_NAME:/home/dev/.local/share/opencode/opencode.json" 2>/dev/null || true
-      podman exec "$CONTAINER_NAME" sh -c "mkdir -p /home/dev/.local/share/opencode && chown -R dev:dev /home/dev/.local" 2>/dev/null || true
+      if ! podman exec "$CONTAINER_NAME" sh -c "mkdir -p /home/dev/.local/share/opencode"; then
+        printf 'WARNING: failed to create opencode config directory\n' >&2
+      elif ! podman cp "$example_config" "$CONTAINER_NAME:/home/dev/.local/share/opencode/opencode.json"; then
+        printf 'WARNING: failed to copy opencode config\n' >&2
+      fi
     fi
     mark_bootstrap_step "$progress" "opencode_config_copied"
   fi

@@ -683,3 +683,89 @@ EOF
   [[ "$output" == *"WARNING: could not resolve home volume mountpoint"* ]]
   [[ "$output" == *"Bootstrap incomplete"* ]]
 }
+
+@test "opencode_config_copied creates directory before copying (podman cp fails on missing target dir)" {
+  mkdir -p "$TESTDIR/project"
+  cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
+[container]
+image = "wolfi-base"
+packages = ["git"]
+EOF
+
+  source lib/toml.sh
+  source lib/podman.sh
+  resolve_project "$TESTDIR/project"
+
+  export OPCODE_POD_LIB_DIR="$TESTDIR/lib-dir"
+  mkdir -p "$OPCODE_POD_LIB_DIR" "$TESTDIR/example"
+  printf '{}' > "$TESTDIR/example/opencode.json"
+
+  podman() {
+    case "$1" in
+      start) return 0 ;;
+      volume)
+        [[ "$2" == "inspect" ]] && printf '%s\n' "$TESTDIR/fake-mount"
+        return 0
+        ;;
+      unshare) return 0 ;;
+      exec)
+        if [[ "$*" == *"mkdir -p /home/dev/.local/share/opencode"* ]]; then
+          touch "$TESTDIR/mkdir-ran"
+        fi
+        return 0
+        ;;
+      cp)
+        if [[ "$*" == *"opencode.json"* ]]; then
+          [[ -f "$TESTDIR/mkdir-ran" ]] || return 1
+        fi
+        return 0
+        ;;
+    esac
+    return 0
+  }
+  export -f podman
+
+  run run_bootstrap
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"WARNING"*"opencode config"* ]]
+}
+
+@test "opencode_config_copied warns visibly when copy fails" {
+  mkdir -p "$TESTDIR/project"
+  cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
+[container]
+image = "wolfi-base"
+packages = ["git"]
+EOF
+
+  source lib/toml.sh
+  source lib/podman.sh
+  resolve_project "$TESTDIR/project"
+
+  export OPCODE_POD_LIB_DIR="$TESTDIR/lib-dir"
+  mkdir -p "$OPCODE_POD_LIB_DIR" "$TESTDIR/example"
+  printf '{}' > "$TESTDIR/example/opencode.json"
+
+  podman() {
+    case "$1" in
+      start) return 0 ;;
+      volume)
+        [[ "$2" == "inspect" ]] && printf '%s\n' "$TESTDIR/fake-mount"
+        return 0
+        ;;
+      unshare) return 0 ;;
+      exec) return 0 ;;
+      cp)
+        if [[ "$*" == *"opencode.json"* ]]; then
+          return 1
+        fi
+        return 0
+        ;;
+    esac
+    return 0
+  }
+  export -f podman
+
+  run run_bootstrap
+  [[ "$output" == *"WARNING"*"opencode config"* ]]
+}
