@@ -1,0 +1,301 @@
+#!/usr/bin/env bash
+# opencode-pod — Secure, disposable dev containers for OpenCode agents.
+# Rootless Podman, Wolfi images, one command.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_DIR="${SCRIPT_DIR}/lib"
+export OPCODE_POD_LIB_DIR="${LIB_DIR}"
+
+source "${LIB_DIR}/toml.sh"
+source "${LIB_DIR}/distro.sh"
+source "${LIB_DIR}/podman.sh"
+source "${LIB_DIR}/security.sh"
+
+usage() {
+  cat << 'EOF'
+Usage: opencode-pod <command> [options]
+
+Commands:
+  init       Create opencode-pod.toml (interactive)
+  start      Build + start container, drop into zsh
+  stop       Stop container, preserve installed tools
+  shell      Open new shell into running container
+  destroy    Remove container + home volume
+  status     Show container state, project path
+  logs       Show container output, --follow for live tail
+  doctor     Health check: podman, image, SELinux, disk space
+  upgrade    Check base image freshness, install new packages from TOML
+
+Options:
+  --help     Show this message
+EOF
+}
+
+cmd_status() {
+  resolve_project || return 1
+  printf 'Container: %s\n' "$CONTAINER_NAME"
+  printf 'State: %s\n' "$CONTAINER_STATE"
+  printf 'Project: %s\n' "$(pwd)"
+  if [[ -n "${CONFIG_CONTAINER_IMAGE:-}" ]]; then
+    printf 'Image: %s\n' "${CONFIG_CONTAINER_IMAGE}"
+  fi
+}
+
+cmd_init() {
+  local config_file="$(pwd)/opencode-pod.toml"
+  if [[ -f "$config_file" ]]; then
+    printf 'opencode-pod.toml already exists in this directory.\n'
+    printf 'Edit it directly or remove it and re-run init.\n'
+    return 1
+  fi
+
+  local default_config="${SCRIPT_DIR}/defaults/opencode-pod.toml"
+  if [[ -f "$default_config" ]]; then
+    cp "$default_config" "$config_file"
+    printf 'Created opencode-pod.toml with defaults.\n'
+    printf 'Edit it to customize packages, mounts, and security options.\n'
+  else
+    cat > "$config_file" << 'TOML'
+[container]
+image = "cgr.dev/chainguard/wolfi-base:latest"
+packages = ["git", "openssh", "curl"]
+user = "dev"
+
+[mounts]
+extra = []
+
+[env]
+
+[network]
+forward = []
+mode = "bridge"
+
+[security]
+http = false
+harden = true
+TOML
+    printf 'Created opencode-pod.toml\n'
+  fi
+}
+
+cmd_start() {
+  local force_recreate=false
+  if [[ "${1:-}" == "--force-recreate" ]]; then
+    force_recreate=true
+  fi
+
+  if $force_recreate; then
+    resolve_project || return 1
+    container_destroy 2>/dev/null || true
+    CONTAINER_STATE="nonexistent"
+  else
+    resolve_project || return 1
+  fi
+
+  if [[ -n "${AUTO_DETECTED_PROFILE:-}" ]]; then
+    printf 'Detected %s project.\n' "$AUTO_DETECTED_PROFILE"
+    printf 'Installing: %s\n' "$AUTO_DETECTED_PACKAGES"
+    printf 'Press Enter to confirm, or type "init" for interactive config: '
+    read -r response
+    if [[ "$response" == "init" ]]; then
+      cmd_init
+      return 0
+    fi
+    local quoted_pkgs=""
+    for pkg in $AUTO_DETECTED_PACKAGES; do
+      quoted_pkgs="${quoted_pkgs}${quoted_pkgs:+, }\"${pkg}\""
+    done
+    cat > "$(pwd)/opencode-pod.toml" << TOML
+[container]
+image = "cgr.dev/chainguard/wolfi-base:latest"
+packages = [${quoted_pkgs}]
+user = "dev"
+
+[mounts]
+extra = []
+
+[env]
+
+[network]
+forward = []
+mode = "bridge"
+
+[security]
+http = false
+harden = true
+TOML
+    resolve_project || return 1
+  fi
+
+  if ! command -v podman &>/dev/null; then
+    classify_error "podman_not_found" 0 ""
+    return 1
+  fi
+
+  local image="${CONFIG_CONTAINER_IMAGE:-cgr.dev/chainguard/wolfi-base:latest}"
+  if ! podman image exists "$image" 2>/dev/null; then
+    printf 'Pulling base image: %s\n' "$image"
+    if ! podman pull "$image"; then
+      classify_error "image_pull" "$?" ""
+      return 1
+    fi
+  fi
+
+  container_start
+}
+
+cmd_stop() {
+  resolve_project || return 1
+  container_stop
+}
+
+cmd_shell() {
+  resolve_project || return 1
+  container_shell
+}
+
+cmd_destroy() {
+  resolve_project || return 1
+  container_destroy
+}
+
+cmd_logs() {
+  resolve_project || return 1
+  if [[ "$CONTAINER_STATE" == "nonexistent" ]]; then
+    printf 'No container found for this project.\n' >&2
+    return 1
+  fi
+  local follow=""
+  local lines="200"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --follow) follow="--follow" ;;
+      -n) lines="$2"; shift ;;
+    esac
+    shift
+  done
+  podman logs --tail "$lines" $follow "$CONTAINER_NAME"
+}
+
+cmd_doctor() {
+  local fix_mode=false
+  if [[ "${1:-}" == "--fix" ]]; then
+    fix_mode=true
+  fi
+
+  printf '=== opencode-pod doctor ===\n\n'
+
+  printf 'Podman installed: '
+  if command -v podman &>/dev/null; then
+    local version
+    version="$(podman version -f '{{.Version}}' 2>/dev/null || printf 'unknown')"
+    printf 'PASS (version %s)\n' "$version"
+  else
+    printf 'FAIL\n'
+    printf '  Fix: Install podman for your distribution.\n'
+    detect_distro 2>/dev/null || true
+    printf '  Command: %s\n' "${DISTRO_INSTALL_CMD:-See https://podman.io/docs/installation}"
+    return 1
+  fi
+
+  printf 'Rootless podman: '
+  if podman info -f '{{.Host.Security.Rootless}}' 2>/dev/null | grep -q "true"; then
+    printf 'PASS\n'
+  else
+    printf 'FAIL\n'
+    printf '  Fix: %s\n' "${DISTRO_SUBUID_INSTRUCTIONS:-Configure subuid/subgid for rootless podman}"
+  fi
+
+  printf 'XDG_RUNTIME_DIR: '
+  if [[ -n "${XDG_RUNTIME_DIR:-}" ]]; then
+    printf 'PASS (%s)\n' "$XDG_RUNTIME_DIR"
+  else
+    printf 'FAIL\n'
+    printf '  Fix: export XDG_RUNTIME_DIR=/run/user/$(id -u)\n'
+  fi
+
+  printf 'Wolfi base image: '
+  if podman image exists cgr.dev/chainguard/wolfi-base:latest 2>/dev/null; then
+    printf 'PASS\n'
+  else
+    printf 'WARN (not pulled yet — will pull on first start)\n'
+  fi
+
+  printf 'Disk space (>2GB): '
+  local avail
+  avail="$(df -BG "$HOME" 2>/dev/null | awk 'NR==2 {print $4}' | tr -d 'G' || printf '0')"
+  if [[ "$avail" -gt 2 ]]; then
+    printf 'PASS (%sG available)\n' "$avail"
+  else
+    printf 'FAIL (%sG available, need 2GB+)\n' "$avail"
+    printf '  Fix: Free up disk space or clean old containers.\n'
+  fi
+}
+
+cmd_upgrade() {
+  local pull_image=false
+  if [[ "${1:-}" == "--pull" ]]; then
+    pull_image=true
+  fi
+
+  resolve_project || return 1
+
+  local image="${CONFIG_CONTAINER_IMAGE:-cgr.dev/chainguard/wolfi-base:latest}"
+  local image_created
+  image_created="$(podman image inspect -f '{{.Created}}' "$image" 2>/dev/null || printf '')"
+
+  if [[ -n "$image_created" ]]; then
+    local created_epoch
+    created_epoch="$(date -d "$image_created" +%s 2>/dev/null || printf '0')"
+    local now_epoch
+    now_epoch="$(date +%s)"
+    local age_days=$(( (now_epoch - created_epoch) / 86400 ))
+    if [[ "$age_days" -ge 30 ]] || $pull_image; then
+      printf 'Base image is %s days old. Pulling latest...\n' "$age_days"
+      podman pull "$image"
+    else
+      printf 'Base image is %s days old (OK, < 30 days).\n' "$age_days"
+    fi
+  fi
+
+  if [[ "$CONTAINER_STATE" != "running" ]]; then
+    printf 'Container must be running for package delta check. Run "opencode-pod start" first.\n'
+    return 1
+  fi
+
+  local toml_packages="${CONFIG_CONTAINER_PACKAGES:-}"
+  if [[ -n "$toml_packages" ]]; then
+    local installed
+    installed="$(podman exec "$CONTAINER_NAME" apk list --installed 2>/dev/null | sed 's/-[0-9].*//' || printf '')"
+    for pkg in $toml_packages; do
+      if ! printf '%s' "$installed" | grep -qxF "$pkg"; then
+        printf 'Installing new package: %s\n' "$pkg"
+        podman exec "$CONTAINER_NAME" apk add --no-cache "$pkg"
+      fi
+    done
+    for installed_pkg in $installed; do
+      if ! printf '%s' " $toml_packages " | grep -q " $installed_pkg "; then
+        printf 'Note: %s is installed but not in opencode-pod.toml (not auto-removing).\n' "$installed_pkg"
+      fi
+    done
+  fi
+
+  printf 'Upgrade complete.\n'
+}
+
+case "${1:-}" in
+  init)     shift; cmd_init "$@" ;;
+  start)    shift; cmd_start "$@" ;;
+  stop)     shift; cmd_stop "$@" ;;
+  shell)    shift; cmd_shell "$@" ;;
+  destroy)  shift; cmd_destroy "$@" ;;
+  status)   shift; cmd_status "$@" ;;
+  logs)     shift; cmd_logs "$@" ;;
+  doctor)   shift; cmd_doctor "$@" ;;
+  upgrade)  shift; cmd_upgrade "$@" ;;
+  --help|-h) usage ;;
+  "")       usage ;;
+  *)        printf 'Unknown command: %s\n' "$1"; usage; exit 1 ;;
+esac
