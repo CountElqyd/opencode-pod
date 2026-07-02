@@ -136,9 +136,12 @@ EOF
   source lib/podman.sh
   resolve_project "$TESTDIR/project"
 
+  podman() { printf '%s\n' "$*" > "$TESTDIR/podman_args"; return 0; }
+  container_create
+
   local cmd
-  cmd="$(container_create_command)"
-  [[ "$cmd" == *"podman create"* ]]
+  cmd="$(cat "$TESTDIR/podman_args")"
+  [[ "$cmd" == *"create"* ]]
   [[ "$cmd" == *"--name ${CONTAINER_NAME}"* ]]
   [[ "$cmd" == *"--volume ${HOME_VOLUME}:/home/dev"* ]]
   [[ "$cmd" == *"--userns=keep-id"* ]]
@@ -160,8 +163,11 @@ EOF
   source lib/podman.sh
   resolve_project "$TESTDIR/project"
 
+  podman() { printf '%s\n' "$*" > "$TESTDIR/podman_args"; return 0; }
+  container_create
+
   local cmd
-  cmd="$(container_create_command)"
+  cmd="$(cat "$TESTDIR/podman_args")"
   [[ "$cmd" == *"--network=none"* ]]
 }
 
@@ -175,8 +181,11 @@ EOF
   source lib/podman.sh
   resolve_project "$TESTDIR/project"
 
+  podman() { printf '%s\n' "$*" > "$TESTDIR/podman_args"; return 0; }
+  container_create
+
   local cmd
-  cmd="$(container_create_command)"
+  cmd="$(cat "$TESTDIR/podman_args")"
   [[ "$cmd" != *"--network=none"* ]]
   [[ "$cmd" != *"--network=host"* ]]
 }
@@ -194,7 +203,70 @@ EOF
   source lib/podman.sh
   resolve_project "$TESTDIR/project"
 
+  podman() { printf '%s\n' "$*" > "$TESTDIR/podman_args"; return 0; }
+  container_create
+
   local cmd
-  cmd="$(container_create_command)"
+  cmd="$(cat "$TESTDIR/podman_args")"
   [[ "$cmd" == *"-v ${HOME}/.npmrc:/home/dev/.npmrc:ro"* ]]
+}
+
+@test "classify_error matches PODMAN_NOT_FOUND" {
+  source lib/podman.sh
+  run classify_error "podman_not_found" 0 "" 2>&1
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Podman is not installed"* ]]
+}
+
+@test "classify_error matches IMAGE_PULL_FAILED" {
+  source lib/podman.sh
+  run classify_error "image_pull" 1 "" 2>&1
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Failed to pull"* ]]
+}
+
+@test "classify_error matches PORT_CONFLICT from stderr" {
+  source lib/podman.sh
+  run classify_error "podman_create" 1 "address already in use" 2>&1
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"in use"* ]]
+}
+
+@test "classify_error matches DISK_SPACE_LOW from stderr" {
+  source lib/podman.sh
+  run classify_error "podman_create" 1 "no space left on device" 2>&1
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"disk space"* ]]
+}
+
+@test "classify_error handles unknown error" {
+  source lib/podman.sh
+  run classify_error "unknown_thing" 1 "" 2>&1
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Unexpected error"* ]]
+}
+
+@test "is_bootstrap_step_done detects completed step" {
+  source lib/podman.sh
+  local tmpfile="$(mktemp)"
+  printf '%s\n' "packages_installed" > "$tmpfile"
+  printf '%s\n' "user_created" >> "$tmpfile"
+
+  run is_bootstrap_step_done "$tmpfile" "packages_installed"
+  [ "$status" -eq 0 ]
+
+  run is_bootstrap_step_done "$tmpfile" "ssh_key_generated"
+  [ "$status" -ne 0 ]
+
+  rm -f "$tmpfile"
+}
+
+@test "mark_bootstrap_step writes step" {
+  source lib/podman.sh
+  local tmpfile="$(mktemp)"
+
+  mark_bootstrap_step "$tmpfile" "packages_installed"
+  grep -q "packages_installed" "$tmpfile"
+
+  rm -f "$tmpfile"
 }

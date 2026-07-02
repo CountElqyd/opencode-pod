@@ -89,30 +89,173 @@ auto_detect_profile() {
   export AUTO_DETECTED_PROFILE AUTO_DETECTED_PACKAGES
 }
 
-classify_error() { printf '%s\n' "Error: $1" >&2; return 1; }
-run_bootstrap() { printf '%s\n' "Bootstrap not yet implemented." >&2; return 0; }
+classify_error() {
+  local operation="${1:-unknown}"
+  local exit_code="${2:-1}"
+  local stderr_output="${3:-}"
 
-container_create_command() {
-  local cmd="podman create"
-  cmd="$cmd --name $CONTAINER_NAME"
-  cmd="$cmd --volume ${HOME_VOLUME}:/home/dev"
-  cmd="$cmd --volume $(pwd):/workspace:Z"
-  cmd="$cmd --userns=keep-id"
-  cmd="$cmd --cap-drop=ALL"
-  cmd="$cmd --security-opt=no-new-privileges"
-  cmd="$cmd --hostname opencode-pod"
+  case "$operation" in
+    podman_not_found|which_podman)
+      printf '%s\n' "ERROR: Podman is not installed." >&2
+      printf '%s\n' "Install with: (see opencode-pod doctor for OS-specific instructions)" >&2
+      return 1
+      ;;
+    image_pull|podman_pull)
+      printf '%s\n' "ERROR: Failed to pull Wolfi base image from cgr.dev." >&2
+      printf '%s\n' "Check your internet connection, or re-run with a cached image." >&2
+      return 1
+      ;;
+    podman_create)
+      if printf '%s' "$stderr_output" | grep -qi "address already in use"; then
+        printf '%s\n' "ERROR: Port is in use. Choose a different port in [network.forward]." >&2
+        return 1
+      fi
+      if printf '%s' "$stderr_output" | grep -qi "no space"; then
+        printf '%s\n' "ERROR: Not enough disk space. Need at least 2GB free." >&2
+        printf '%s\n' "Clean old containers: opencode-pod doctor" >&2
+        return 1
+      fi
+      if printf '%s' "$stderr_output" | grep -qi "SELinux\|selinux\|avc"; then
+        printf '%s\n' "ERROR: SELinux blocked container access to the project directory." >&2
+        printf '%s\n' "Run: restorecon -Rv $(pwd)" >&2
+        return 1
+      fi
+      if printf '%s' "$stderr_output" | grep -qi "subuid\|subgid\|user namespace"; then
+        printf '%s\n' "ERROR: Rootless Podman requires subuid/subgid configuration." >&2
+        printf '%s\n' "Run 'opencode-pod doctor' for setup instructions." >&2
+        return 1
+      fi
+      printf '%s\n' "ERROR: Container creation failed (exit code ${exit_code})." >&2
+      printf '%s\n' "Run 'opencode-pod doctor' to diagnose." >&2
+      return 1
+      ;;
+    apk_add)
+      if printf '%s' "$stderr_output" | grep -qi "network\|unreachable\|temporary failure"; then
+        printf '%s\n' "ERROR: Package install failed — could not reach Wolfi package repos." >&2
+        printf '%s\n' "Run 'opencode-pod doctor' to verify container networking." >&2
+        return 1
+      fi
+      if printf '%s' "$stderr_output" | grep -qi "not found\|404"; then
+        printf '%s\n' "ERROR: Package not found in Wolfi repos." >&2
+        printf '%s\n' "Check package name spelling in opencode-pod.toml" >&2
+        return 1
+      fi
+      printf '%s\n' "ERROR: Package install failed (exit code ${exit_code})." >&2
+      printf '%s\n' "Check opencode-pod.toml package names and try again." >&2
+      return 1
+      ;;
+    toml_parse)
+      printf '%s\n' "ERROR: Could not parse opencode-pod.toml" >&2
+      printf '%s\n' "Run 'opencode-pod init' to regenerate a valid config." >&2
+      return 1
+      ;;
+    *)
+      printf '%s\n' "ERROR: Unexpected error during '${operation}' (exit code ${exit_code})." >&2
+      printf '%s\n' "Run 'opencode-pod doctor' to diagnose." >&2
+      return 1
+      ;;
+  esac
+}
+
+BOOTSTRAP_PROGRESS_FILE="/home/dev/.bootstrap-progress"
+
+is_bootstrap_step_done() {
+  local progress_file="$1"
+  local step="$2"
+  [[ -f "$progress_file" ]] && grep -qxF "$step" "$progress_file"
+}
+
+mark_bootstrap_step() {
+  local progress_file="$1"
+  local step="$2"
+  printf '%s\n' "$step" >> "$progress_file"
+}
+
+run_bootstrap() {
+  local progress="/tmp/.bootstrap-progress-${CONTAINER_NAME}"
+  rm -f "$progress"
+  touch "$progress"
+
+  local completed_all=true
+
+  if ! is_bootstrap_step_done "$progress" "packages_installed"; then
+    local packages="${CONFIG_CONTAINER_PACKAGES:-git openssh curl}"
+    printf '%s\n' "Installing packages: $packages"
+    if ! podman exec "$CONTAINER_NAME" apk add --no-cache $packages; then
+      classify_error "apk_add" "$?" "" >&2
+      completed_all=false
+    else
+      mark_bootstrap_step "$progress" "packages_installed"
+    fi
+  fi
+
+  if ! is_bootstrap_step_done "$progress" "user_created"; then
+    printf '%s\n' "Creating user: dev"
+    local host_uid
+    host_uid="$(id -u)"
+    if ! podman exec "$CONTAINER_NAME" sh -c "id dev 2>/dev/null || adduser -D -u ${host_uid} dev"; then
+      printf '%s\n' "Failed to create dev user. Container may need --force-recreate." >&2
+      completed_all=false
+    else
+      mark_bootstrap_step "$progress" "user_created"
+    fi
+  fi
+
+  if ! is_bootstrap_step_done "$progress" "ssh_key_generated"; then
+    printf '%s\n' "Generating SSH key..."
+    if ! podman exec "$CONTAINER_NAME" sh -c "mkdir -p /home/dev/.ssh && ssh-keygen -t ed25519 -f /home/dev/.ssh/id_ed25519 -N '' -C 'opencode-pod'"; then
+      printf '%s\n' "Failed to generate SSH key." >&2
+      completed_all=false
+    else
+      mark_bootstrap_step "$progress" "ssh_key_generated"
+    fi
+  fi
+
+  if ! is_bootstrap_step_done "$progress" "opencode_config_copied"; then
+    printf '%s\n' "Copying OpenCode config..."
+    local example_config="${OPCODE_POD_LIB_DIR:-$HOME/.local/share/opencode-pod}/../example/opencode.json"
+    if [[ -f "$example_config" ]]; then
+      podman cp "$example_config" "$CONTAINER_NAME:/home/dev/.local/share/opencode/opencode.json" 2>/dev/null || true
+      podman exec "$CONTAINER_NAME" sh -c "mkdir -p /home/dev/.local/share/opencode && chown -R dev:dev /home/dev/.local" 2>/dev/null || true
+    fi
+    mark_bootstrap_step "$progress" "opencode_config_copied"
+  fi
+
+  podman cp "$progress" "$CONTAINER_NAME:${BOOTSTRAP_PROGRESS_FILE}" 2>/dev/null || true
+  rm -f "$progress"
+
+  if ! $completed_all; then
+    printf '%s\n' "Bootstrap incomplete. Re-run 'opencode-pod start' to resume from checkpoint." >&2
+    printf '%s\n' "Or use --force-recreate to destroy and start fresh." >&2
+    return 1
+  fi
+
+  printf '%s\n' "Bootstrap complete."
+  return 0
+}
+
+container_create() {
+  local -a args=()
+  args+=(create)
+  args+=(--name "$CONTAINER_NAME")
+  args+=(--volume "${HOME_VOLUME}:/home/dev")
+  args+=(--volume "$(pwd):/workspace:Z")
+  args+=(--userns=keep-id)
+  args+=(--cap-drop=ALL)
+  args+=(--security-opt=no-new-privileges)
+  args+=(--hostname opencode-pod)
 
   local network_mode="${CONFIG_NETWORK_MODE:-bridge}"
   if [[ "$network_mode" == "none" ]]; then
-    cmd="$cmd --network=none"
+    args+=(--network=none)
   elif [[ "$network_mode" == "host" ]]; then
-    cmd="$cmd --network=host"
+    args+=(--network=host)
   fi
 
   local ports="${CONFIG_NETWORK_FORWARD:-}"
   if [[ -n "$ports" ]]; then
     for port in $ports; do
-      cmd="$cmd -p 127.0.0.1:${port}:${port}"
+      args+=(-p "127.0.0.1:${port}:${port}")
     done
   fi
 
@@ -120,24 +263,22 @@ container_create_command() {
   if [[ -n "$extra_mounts" ]]; then
     for mount in $extra_mounts; do
       mount="${mount/#\~/$HOME}"
-      cmd="$cmd -v $mount"
+      args+=(-v "$mount")
     done
   fi
 
-  if [[ -n "${CONFIG_ENV:-}" ]]; then
-    while IFS='=' read -r varname varval; do
-      if [[ "$varname" == CONFIG_ENV_* ]]; then
-        local envkey="${varname#CONFIG_ENV_}"
-        envkey="$(printf '%s' "$envkey" | tr '[:upper:]' '[:lower:]')"
-        cmd="$cmd --env ${envkey}=${varval}"
-      fi
-    done < <(env | grep '^CONFIG_ENV_')
-  fi
+  while IFS='=' read -r varname varval; do
+    if [[ "$varname" == CONFIG_ENV_* ]]; then
+      local envkey="${varname#CONFIG_ENV_}"
+      envkey="$(printf '%s' "$envkey" | tr '[:upper:]' '[:lower:]')"
+      args+=(--env "${envkey}=${varval}")
+    fi
+  done < <(env | grep '^CONFIG_ENV_')
 
-  cmd="$cmd ${CONFIG_CONTAINER_IMAGE:-cgr.dev/chainguard/wolfi-base:latest}"
-  cmd="$cmd /bin/sh"
+  args+=("${CONFIG_CONTAINER_IMAGE:-cgr.dev/chainguard/wolfi-base:latest}")
+  args+=(/bin/sh)
 
-  printf '%s' "$cmd"
+  podman "${args[@]}"
 }
 
 container_start() {
@@ -149,7 +290,7 @@ container_start() {
 
   if [[ "$CONTAINER_STATE" == "paused" ]] || [[ "$CONTAINER_STATE" == "exited" ]]; then
     printf '%s\n' "Starting existing container: $CONTAINER_NAME"
-    podman start "$CONTAINER_NAME"
+    podman start "$CONTAINER_NAME" || return 1
     podman exec -it "$CONTAINER_NAME" /usr/bin/zsh 2>/dev/null || podman exec -it "$CONTAINER_NAME" /bin/sh
     return 0
   fi
@@ -157,14 +298,13 @@ container_start() {
   printf '%s\n' "Creating container: $CONTAINER_NAME"
   podman volume create "$HOME_VOLUME" 2>/dev/null || true
 
-  local create_cmd
-  create_cmd="$(container_create_command)"
-  if ! eval "$create_cmd"; then
-    classify_error "podman_create" "$?" "" >&2
-    return 1
+  if ! container_create; then
+    local rc=$?
+    classify_error "podman_create" "$rc" "" >&2
+    return $rc
   fi
 
-  podman start "$CONTAINER_NAME"
+  podman start "$CONTAINER_NAME" || return 1
 
   run_bootstrap
 
@@ -177,7 +317,7 @@ container_stop() {
     return 1
   fi
   printf '%s\n' "Stopping container: $CONTAINER_NAME"
-  podman stop "$CONTAINER_NAME"
+  podman stop "$CONTAINER_NAME" || return 1
 }
 
 container_shell() {
