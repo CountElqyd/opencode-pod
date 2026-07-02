@@ -216,9 +216,6 @@ run_bootstrap() {
     fi
   fi
 
-  # Ensure home dir is owned by dev — prior steps may have created root-owned files
-  podman exec "$CONTAINER_NAME" sh -c "chown -R 1000:1000 /home/dev" 2>/dev/null || true
-
   if ! is_bootstrap_step_done "$progress" "ssh_key_generated"; then
     printf '%s\n' "Generating SSH key..."
     if ! podman exec "$CONTAINER_NAME" sh -c "mkdir -p /home/dev/.ssh && ssh-keygen -t ed25519 -f /home/dev/.ssh/id_ed25519 -N '' -C 'opencode-pod'"; then
@@ -239,12 +236,9 @@ run_bootstrap() {
     mark_bootstrap_step "$progress" "opencode_config_copied"
   fi
 
-  # chown again — ssh_keygen and config_copy ran as root since user_created
-  podman exec "$CONTAINER_NAME" sh -c "chown -R 1000:1000 /home/dev" 2>/dev/null || true
-
   if ! is_bootstrap_step_done "$progress" "opencode_installed"; then
     printf '%s\n' "Installing opencode..."
-    if podman exec -u dev -w /home/dev "$CONTAINER_NAME" npm install -g opencode-ai; then
+    if podman exec "$CONTAINER_NAME" npm install -g opencode-ai; then
       mark_bootstrap_step "$progress" "opencode_installed"
     else
       printf '%s\n' "Failed to install opencode. Check network access." >&2
