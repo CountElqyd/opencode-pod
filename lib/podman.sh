@@ -253,6 +253,18 @@ run_bootstrap() {
       nvm install --lts
     "; then
       mark_bootstrap_step "$progress" "nvm_installed"
+
+      # nvm install script only configures existing profiles.
+      # Since /home/dev is empty, write .zshenv ourselves so zsh
+      # sources nvm in all shell modes (interactive + non-interactive).
+      podman exec -u dev "$CONTAINER_NAME" sh -c '
+        if ! grep -qs nvm /home/dev/.zshenv 2>/dev/null; then
+          cat > /home/dev/.zshenv << "EOF"
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+EOF
+        fi
+      '
     else
       printf 'ERROR: nvm install failed\n' >&2
       completed_all=false
