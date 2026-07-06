@@ -571,7 +571,7 @@ EOF
   rm -f "$progress"
 }
 
-@test "bootstrap nvm failure is non-fatal" {
+@test "bootstrap nvm failure blocks bootstrap" {
   mkdir -p "$TESTDIR/project"
   cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
 [container]
@@ -601,9 +601,9 @@ EOF
   export -f podman
 
   run run_bootstrap
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"WARNING"*"nvm"* ]]
-  [[ "$output" == *"Bootstrap complete"* ]]
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"ERROR"*"nvm"* ]]
+  [[ "$output" == *"Bootstrap incomplete"* ]]
 }
 
 @test "container_start reattaches to running container after setup" {

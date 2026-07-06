@@ -193,7 +193,7 @@ run_bootstrap() {
   local completed_all=true
 
   if ! is_bootstrap_step_done "$progress" "packages_installed"; then
-    local packages="${CONFIG_CONTAINER_PACKAGES:-git openssh curl} nodejs npm zsh bash vim"
+    local packages="${CONFIG_CONTAINER_PACKAGES:-git openssh curl} zsh bash vim"
     printf '%s\n' "Installing packages: $packages"
     local apk_stderr
     apk_stderr="$(mktemp)"
@@ -254,7 +254,8 @@ run_bootstrap() {
     "; then
       mark_bootstrap_step "$progress" "nvm_installed"
     else
-      printf 'WARNING: nvm install failed (non-fatal)\n' >&2
+      printf 'ERROR: nvm install failed\n' >&2
+      completed_all=false
     fi
   fi
 
@@ -275,7 +276,11 @@ run_bootstrap() {
 
   if ! is_bootstrap_step_done "$progress" "opencode_installed"; then
     printf '%s\n' "Installing opencode..."
-    if podman exec "$CONTAINER_NAME" npm install -g opencode-ai; then
+    if podman exec -u dev "$CONTAINER_NAME" bash -c "
+      export NVM_DIR=\"\$HOME/.nvm\" &&
+      [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\" &&
+      npm install -g opencode-ai
+    "; then
       mark_bootstrap_step "$progress" "opencode_installed"
     else
       printf '%s\n' "Failed to install opencode. Check network access." >&2
