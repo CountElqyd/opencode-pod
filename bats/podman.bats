@@ -437,7 +437,7 @@ EOF
 
   # Pre-populate progress file with all steps done including opencode
   local progress="/tmp/.bootstrap-progress-${CONTAINER_NAME}"
-  printf 'packages_installed\nuser_created\nssh_key_generated\nopencode_config_copied\nopencode_installed\n' > "$progress"
+  printf 'packages_installed\nuser_created\nssh_key_generated\nnvm_installed\nopencode_config_copied\nopencode_installed\n' > "$progress"
 
   podman() {
     case "$1" in
@@ -495,6 +495,115 @@ EOF
   [ "$status" -ne 0 ]
   [[ "$output" == *"Bootstrap incomplete"* ]]
   [[ "$output" == *"opencode"* ]]
+}
+
+@test "bootstrap installs nvm and LTS node for dev user" {
+  mkdir -p "$TESTDIR/project"
+  cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
+[container]
+image = "wolfi-base"
+packages = ["git"]
+EOF
+
+  source lib/toml.sh
+  source lib/podman.sh
+  resolve_project "$TESTDIR/project"
+
+  podman() {
+    case "$1" in
+      start) return 0 ;;
+      exec)
+        if [[ "$*" == *"id dev"* ]]; then return 0; fi
+        if [[ "$*" == *"ssh-keygen"* ]]; then return 0; fi
+        if [[ "$*" == *"apk"* ]]; then return 0; fi
+        if [[ "$*" == *"bash -c"* ]]; then return 0; fi
+        if [[ "$*" == *"npm install"* ]]; then return 0; fi
+        return 0
+        ;;
+      cp) return 0 ;;
+    esac
+    return 0
+  }
+  export -f podman
+
+  run run_bootstrap
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Installing nvm"* ]]
+  [[ "$output" == *"Bootstrap complete"* ]]
+}
+
+@test "bootstrap nvm step is skipped if already done" {
+  mkdir -p "$TESTDIR/project"
+  cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
+[container]
+image = "wolfi-base"
+packages = ["git"]
+EOF
+
+  source lib/toml.sh
+  source lib/podman.sh
+  resolve_project "$TESTDIR/project"
+
+  local progress="/tmp/.bootstrap-progress-${CONTAINER_NAME}"
+  printf 'packages_installed\nuser_created\nssh_key_generated\nnvm_installed\n' > "$progress"
+
+  podman() {
+    case "$1" in
+      start) return 0 ;;
+      cp)
+        if [[ "$*" == *".bootstrap-progress" ]]; then
+          mkdir -p "$(dirname "$3")" 2>/dev/null || true
+          cp "$progress" "$3"
+        fi
+        return 0
+        ;;
+      exec) return 0 ;;
+    esac
+    return 0
+  }
+  export -f podman
+
+  run run_bootstrap
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"Installing nvm"* ]]
+  [[ "$output" == *"Bootstrap complete"* ]]
+
+  rm -f "$progress"
+}
+
+@test "bootstrap nvm failure is non-fatal" {
+  mkdir -p "$TESTDIR/project"
+  cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
+[container]
+image = "wolfi-base"
+packages = ["git"]
+EOF
+
+  source lib/toml.sh
+  source lib/podman.sh
+  resolve_project "$TESTDIR/project"
+
+  podman() {
+    case "$1" in
+      start) return 0 ;;
+      exec)
+        if [[ "$*" == *"id dev"* ]]; then return 0; fi
+        if [[ "$*" == *"ssh-keygen"* ]]; then return 0; fi
+        if [[ "$*" == *"apk"* ]]; then return 0; fi
+        if [[ "$*" == *"bash -c"* ]]; then return 1; fi
+        if [[ "$*" == *"npm install"* ]]; then return 0; fi
+        return 0
+        ;;
+      cp) return 0 ;;
+    esac
+    return 0
+  }
+  export -f podman
+
+  run run_bootstrap
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"WARNING"*"nvm"* ]]
+  [[ "$output" == *"Bootstrap complete"* ]]
 }
 
 @test "container_start reattaches to running container after setup" {
@@ -613,7 +722,7 @@ EOF
   [[ "$output" == *"WARNING"* ]]
 }
 
-@test "run_bootstrap calls fix_home_ownership at the end" {
+@test "run_bootstrap calls fix_home_ownership at the beginning" {
   mkdir -p "$TESTDIR/project"
   cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
 [container]
@@ -655,7 +764,7 @@ EOF
   [[ "$cmd" == *"$TESTDIR/fake-mount"* ]]
 }
 
-@test "run_bootstrap reports incomplete when fix_home_ownership fails" {
+@test "run_bootstrap completes despite fix_home_ownership failure" {
   mkdir -p "$TESTDIR/project"
   cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
 [container]
@@ -679,9 +788,9 @@ EOF
   export -f podman
 
   run run_bootstrap
-  [ "$status" -ne 0 ]
+  [ "$status" -eq 0 ]
   [[ "$output" == *"WARNING: could not resolve home volume mountpoint"* ]]
-  [[ "$output" == *"Bootstrap incomplete"* ]]
+  [[ "$output" == *"Bootstrap complete"* ]]
 }
 
 @test "opencode_config_copied creates directory before copying (podman cp fails on missing target dir)" {
