@@ -222,7 +222,11 @@ run_bootstrap() {
 
   if ! is_bootstrap_step_done "$progress" "user_created"; then
     printf '%s\n' "Creating user: dev"
-    if ! podman exec "$CONTAINER_NAME" sh -c "id dev 2>/dev/null || ( sed -i '/^[^:]*:[^:]*:1000:/d' /etc/passwd && sed -i '/^[^:]*:[^:]*:1000:/d' /etc/group && adduser -D -u 1000 -s /usr/bin/zsh dev 2>/dev/null)"; then
+    local adduser_stderr
+    adduser_stderr="$(mktemp)"
+    if ! podman exec "$CONTAINER_NAME" sh -c "id dev 2>/dev/null || ( sed -i '/^[^:]*:[^:]*:1000:/d' /etc/passwd && sed -i '/^[^:]*:[^:]*:1000:/d' /etc/group && adduser -D -u 1000 -s /usr/bin/zsh dev)" 2>"$adduser_stderr"; then
+      printf '%s\n' "$(cat "$adduser_stderr")" >&2
+      rm -f "$adduser_stderr"
       printf '%s\n' "Failed to create dev user. Container may need --force-recreate." >&2
       completed_all=false
     else
@@ -243,7 +247,7 @@ run_bootstrap() {
   if ! is_bootstrap_step_done "$progress" "nvm_installed"; then
     printf '%s\n' "Installing nvm..."
     if podman exec -u dev "$CONTAINER_NAME" bash -c "
-      curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash &&
+      curl -fo- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash &&
       export NVM_DIR=\"\$HOME/.nvm\" &&
       [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\" &&
       nvm install --lts
@@ -375,7 +379,9 @@ container_setup() {
 
   podman start "$CONTAINER_NAME" || return 1
 
-  run_bootstrap || true
+  if ! run_bootstrap; then
+    printf '%s\n' "Bootstrap had errors — will retry on 'start'." >&2
+  fi
 
   podman stop "$CONTAINER_NAME" 2>/dev/null || true
   printf '%s\n' "Container ready. Run 'opencode-pod start' to enter."
