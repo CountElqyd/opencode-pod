@@ -101,7 +101,7 @@ parse_toml() {
 
       # Use printf -v for safe variable assignment
       printf -v "$varname" '%s' "$value"
-      export "$varname"
+      export "${varname?}"
     else
       echo "Error: could not parse ${config_file} at line ${line_number}: ${line}" >&2
       return 1

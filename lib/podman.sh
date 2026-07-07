@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Container lifecycle management for opencode-pod.
 # Requires lib/toml.sh to be sourced first.
-set -euo pipefail
 
 OPCODE_POD_PREFIX="opencode-pod"
 
@@ -197,13 +196,14 @@ run_bootstrap() {
     printf '%s\n' "Installing packages: $packages"
     local apk_stderr
     apk_stderr="$(mktemp)"
+    # shellcheck disable=SC2086
     podman exec "$CONTAINER_NAME" apk add -U --no-cache $packages 2>"$apk_stderr" || true
     local stderr_text
     stderr_text="$(cat "$apk_stderr")"
     rm -f "$apk_stderr"
 
-    # Verify each package actually installed (apk exit code is unreliable due to triggers)
     local missing=""
+    # shellcheck disable=SC2086
     for pkg in $packages; do
       if ! podman exec "$CONTAINER_NAME" apk info -e "$pkg" &>/dev/null; then
         missing="${missing}${missing:+ }${pkg}"
@@ -336,6 +336,7 @@ container_create() {
 
   local ports="${CONFIG_NETWORK_FORWARD:-}"
   if [[ -n "$ports" ]]; then
+    # shellcheck disable=SC2086
     for port in $ports; do
       args+=(-p "127.0.0.1:${port}:${port}")
     done
@@ -343,6 +344,7 @@ container_create() {
 
   local extra_mounts="${CONFIG_MOUNTS_EXTRA:-}"
   if [[ -n "$extra_mounts" ]]; then
+    # shellcheck disable=SC2086
     for mount in $extra_mounts; do
       mount="${mount/#\~/$HOME}"
       args+=(-v "$mount")

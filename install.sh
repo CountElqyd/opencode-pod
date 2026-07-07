@@ -36,8 +36,8 @@ if [[ -f /etc/os-release ]]; then
   else
     DISTRO_SH="$(mktemp)"
     curl -fsSL "$BASE_URL/lib/distro.sh" -o "$DISTRO_SH" 2>/dev/null || true
-    # shellcheck disable=SC1091
-    [ -f "$DISTRO_SH" ] && source "$DISTRO_SH" 2>/dev/null || true
+    # shellcheck disable=SC1090
+    source "$DISTRO_SH" 2>/dev/null || true
     rm -f "$DISTRO_SH"
   fi
   detect_distro 2>/dev/null || true
@@ -96,6 +96,7 @@ install_file "example/opencode.json" "$DEST_DIR/share/opencode-pod/example/openc
 
 printf '\nInstalled to %s/bin/opencode-pod\n' "$DEST_DIR"
 printf '\nMake sure %s/bin is on your PATH:\n' "$DEST_DIR"
+# shellcheck disable=SC2016
 printf '  export PATH="%s/bin:$PATH"\n' "$DEST_DIR"
 printf '\nThen pull the Wolfi base image:\n'
 printf '  podman pull cgr.dev/chainguard/wolfi-base:latest\n'

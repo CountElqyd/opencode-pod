@@ -15,9 +15,13 @@ fi
 
 export OPCODE_POD_LIB_DIR="${LIB_DIR}"
 
+# shellcheck disable=SC1091
 source "${LIB_DIR}/toml.sh"
+# shellcheck disable=SC1091
 source "${LIB_DIR}/distro.sh"
+# shellcheck disable=SC1091
 source "${LIB_DIR}/podman.sh"
+# shellcheck disable=SC1091
 source "${LIB_DIR}/security.sh"
 
 usage() {
@@ -50,7 +54,8 @@ cmd_status() {
 }
 
 cmd_init() {
-  local config_file="$(pwd)/opencode-pod.toml"
+  local config_file
+  config_file="$(pwd)/opencode-pod.toml"
   if [[ -f "$config_file" ]]; then
     printf 'opencode-pod.toml already exists in this directory.\n'
     printf 'Edit it directly or remove it and re-run init.\n'
@@ -99,6 +104,7 @@ cmd_start() {
       return 0
     fi
     local quoted_pkgs=""
+    # shellcheck disable=SC2086
     for pkg in $AUTO_DETECTED_PACKAGES; do
       quoted_pkgs="${quoted_pkgs}${quoted_pkgs:+, }\"${pkg}\""
     done
@@ -169,6 +175,7 @@ cmd_destroy() {
 cmd_doctor() {
   local fix_mode=false
   if [[ "${1:-}" == "--fix" ]]; then
+    # shellcheck disable=SC2034
     fix_mode=true
   fi
 
@@ -200,6 +207,7 @@ cmd_doctor() {
     printf 'PASS (%s)\n' "$XDG_RUNTIME_DIR"
   else
     printf 'FAIL\n'
+    # shellcheck disable=SC2016
     printf '  Fix: export XDG_RUNTIME_DIR=/run/user/$(id -u)\n'
   fi
 
@@ -256,12 +264,14 @@ cmd_upgrade() {
   if [[ -n "$toml_packages" ]]; then
     local installed
     installed="$(podman exec "$CONTAINER_NAME" apk list --installed 2>/dev/null | sed 's/-[0-9].*//' || printf '')"
+    # shellcheck disable=SC2086
     for pkg in $toml_packages; do
       if ! printf '%s' "$installed" | grep -qxF "$pkg"; then
         printf 'Installing new package: %s\n' "$pkg"
         podman exec "$CONTAINER_NAME" apk add -U --no-cache "$pkg"
       fi
     done
+    # shellcheck disable=SC2086
     for installed_pkg in $installed; do
       if ! printf '%s' " $toml_packages " | grep -q " $installed_pkg "; then
         printf 'Note: %s is installed but not in opencode-pod.toml (not auto-removing).\n' "$installed_pkg"
