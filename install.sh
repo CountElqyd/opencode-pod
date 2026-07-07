@@ -16,7 +16,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 BASE_URL="https://raw.githubusercontent.com/${REPO}/${REF}"
 
 # Detect local vs remote mode
