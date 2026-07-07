@@ -1,5 +1,6 @@
 .worktrees/
 
 node_modules/
-package-lock.json
-package.json
+idea.md
+usage_testing.md
+docs/superpowers/

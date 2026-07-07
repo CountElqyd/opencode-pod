@@ -435,14 +435,6 @@ container_stop() {
   podman stop "$CONTAINER_NAME" || return 1
 }
 
-container_shell() {
-  if [[ "$CONTAINER_STATE" != "running" ]]; then
-    printf '%s\n' "Container is not running. Run 'opencode-pod start' first." >&2
-    return 1
-  fi
-  podman exec -it -u dev --workdir /workspace "$CONTAINER_NAME" /usr/bin/zsh 2>/dev/null || podman exec -it -u dev --workdir /workspace "$CONTAINER_NAME" /bin/sh
-}
-
 container_destroy() {
   if [[ "$CONTAINER_STATE" == "nonexistent" ]]; then
     printf '%s\n' "No container found for this project." >&2

@@ -5,8 +5,8 @@ PRs welcome for distro support and config improvements.
 ## Development
 
 ```sh
-git clone https://github.com/.../opencode-podman-setup.git
-cd opencode-podman-setup
+git clone https://github.com/CountElqyd/opencode-pod.git
+cd opencode-pod
 ```
 
 Run tests:

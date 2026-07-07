@@ -29,10 +29,8 @@ Commands:
   setup      Pull image, create container, install packages (one-time, ~60s)
   start      Enter container shell (instant)
   stop       Stop container, preserve installed tools
-  shell      Open new shell into running container
   destroy    Remove container + home volume
   status     Show container state, project path
-  logs       Show container output, --follow for live tail
   doctor     Health check: podman, image, SELinux, disk space
   upgrade    Check base image freshness, install new packages from TOML
 
@@ -163,32 +161,9 @@ cmd_stop() {
   container_stop
 }
 
-cmd_shell() {
-  resolve_project || return 1
-  container_shell
-}
-
 cmd_destroy() {
   resolve_project || return 1
   container_destroy
-}
-
-cmd_logs() {
-  resolve_project || return 1
-  if [[ "$CONTAINER_STATE" == "nonexistent" ]]; then
-    printf 'No container found for this project.\n' >&2
-    return 1
-  fi
-  local follow=""
-  local lines="200"
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      --follow) follow="--follow" ;;
-      -n) lines="$2"; shift ;;
-    esac
-    shift
-  done
-  podman logs --tail "$lines" $follow "$CONTAINER_NAME"
 }
 
 cmd_doctor() {
@@ -302,10 +277,8 @@ case "${1:-}" in
   start)    shift; cmd_start "$@" ;;
   setup)    shift; cmd_setup "$@" ;;  
   stop)     shift; cmd_stop "$@" ;;
-  shell)    shift; cmd_shell "$@" ;;
   destroy)  shift; cmd_destroy "$@" ;;
-  status)   shift; cmd_status "$@" ;;
-  logs)     shift; cmd_logs "$@" ;;
+  status)   shift; cmd_status "$@" ;;  
   doctor)   shift; cmd_doctor "$@" ;;
   upgrade)  shift; cmd_upgrade "$@" ;;
   --help|-h) usage ;;

@@ -80,10 +80,8 @@ opencode-pod init      # create opencode-pod.toml (offline, instant)
 opencode-pod setup     # pull image, create container, run bootstrap (one-time)
 opencode-pod start     # enter container shell (instant — exec into running container)
 opencode-pod stop      # stop container, preserve installed tools
-opencode-pod shell     # open new shell into running container
 opencode-pod destroy   # remove container + home volume
 opencode-pod status    # show container state, project path
-opencode-pod logs      # show container output, --follow for live tail
 opencode-pod doctor    # health check: podman, image, SELinux, disk space
 opencode-pod upgrade   # check base image freshness, install new packages from TOML
 ```
@@ -152,7 +150,6 @@ opencode-pod start
  └── No container? → error: "Container not set up. Run 'opencode-pod setup' first."
 
 opencode-pod stop → podman stop <container> (pauses, home volume intact)
-opencode-pod shell → podman exec -it --workdir /workspace <container> zsh (into running container)
 opencode-pod destroy → podman rm -f <container> + podman volume rm <home-volume>
 ```
 
@@ -247,16 +244,6 @@ Checks:
 - Port forward ports are free
 
 Each failure prints a fix command. Checks requiring sudo (subuid setup) are report-only even with `--fix`.
-
-### Logs Command
-
-`opencode-pod logs` shows the last 200 lines of container output for the current project. `--follow` tails live output. Podman captures container output for persistent containers; this reads from the Podman log driver.
-
-```
-opencode-pod logs          # last 200 lines
-opencode-pod logs --follow # tail -f equivalent
-opencode-pod logs -n 50    # last 50 lines
-```
 
 ### Security Model
 
@@ -364,7 +351,6 @@ opencode-pod stop    # pause container (e.g., end of day)
 
 **Debugging:**
 ```sh
-opencode-pod logs          # see what happened in the container
 opencode-pod doctor        # diagnose any setup issues
 opencode-pod upgrade       # check for stale base image, add new packages
 ```

@@ -639,17 +639,6 @@ EOF
   [[ "$cmd" == *"-u dev"* ]]
 }
 
-@test "container_shell execs as dev user" {
-  source lib/podman.sh
-  CONTAINER_NAME="test"
-  CONTAINER_STATE="running"
-  podman() { printf '%s\n' "$*" > "$TESTDIR/podman_args"; return 0; }
-  container_shell
-  local cmd
-  cmd="$(cat "$TESTDIR/podman_args")"
-  [[ "$cmd" == *"-u dev"* ]]
-}
-
 # --- fix_home_ownership ---
 
 @test "fix_home_ownership resolves mountpoint and chowns via podman unshare" {
