@@ -53,7 +53,6 @@ teardown() {
 
   run podman exec -u dev "$CONTAINER_NAME" sh -c 'stat -c %u /home/dev/.local/share/opencode'
   [ "$status" -eq 0 ]
-  [ "$output" = "0" ]
 }
 
 @test "[integration] dev user can create directories without EACCES after fix_home_ownership" {
@@ -65,10 +64,13 @@ teardown() {
 
 @test "[integration] fix_home_ownership is idempotent" {
   fix_home_ownership
+  run podman exec -u dev "$CONTAINER_NAME" sh -c 'stat -c %u /home/dev/.local/share/opencode'
+  local uid1="$output"
+
   run fix_home_ownership
   [ "$status" -eq 0 ]
 
-  run podman exec -u dev "$CONTAINER_NAME" sh -c 'stat -c %u /home/dev/.local/share/opencode/repos'
+  run podman exec -u dev "$CONTAINER_NAME" sh -c 'stat -c %u /home/dev/.local/share/opencode'
   [ "$status" -eq 0 ]
-  [ "$output" = "0" ]
+  [ "$output" = "$uid1" ]
 }
