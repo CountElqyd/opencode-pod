@@ -69,6 +69,7 @@ EOF
   source lib/toml.sh
   parse_toml "$TESTDIR/config.toml"
 
+  # shellcheck disable=SC2088
   [ "$CONFIG_MOUNTS_EXTRA" = "~/.npmrc:/home/dev/.npmrc:ro" ]
 }
 
@@ -177,7 +178,11 @@ EOF
   source lib/toml.sh
   parse_toml "$TESTDIR/config.toml"
 
-  [ -f "$CACHE_DIR/opencode-pod-config"* ]
+  local found=false
+  for f in "$CACHE_DIR"/opencode-pod-config-*; do
+    [ -f "$f" ] && found=true && break
+  done
+  $found
 }
 
 @test "config cache invalidates on mtime change" {
@@ -190,7 +195,9 @@ EOF
   source lib/toml.sh
   parse_toml "$TESTDIR/config.toml"
   local cache_file
-  cache_file="$(ls -t "$CACHE_DIR"/opencode-pod-config-* 2>/dev/null | head -1)"
+  for cache_file in "$CACHE_DIR"/opencode-pod-config-*; do
+    [ -f "$cache_file" ] && break
+  done
   local first_mtime
   first_mtime="$(head -n 1 "$cache_file")"
 

@@ -10,16 +10,14 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Install shellcheck
-        run: sudo apt-get install -y shellcheck
+      - uses: actions/checkout@v7
       - name: Run shellcheck
-        run: shellcheck opencode-pod install.sh lib/*.sh
+        run: npx shellcheck opencode-pod install.sh lib/*.sh
 
   unit-tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install bats
         run: sudo apt-get install -y bats
       - name: Run bats tests

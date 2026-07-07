@@ -252,7 +252,8 @@ EOF
 
 @test "is_bootstrap_step_done detects completed step" {
   source lib/podman.sh
-  local tmpfile="$(mktemp)"
+  local tmpfile
+  tmpfile="$(mktemp)"
   printf '%s\n' "packages_installed" > "$tmpfile"
   printf '%s\n' "user_created" >> "$tmpfile"
 
@@ -267,7 +268,8 @@ EOF
 
 @test "mark_bootstrap_step writes step" {
   source lib/podman.sh
-  local tmpfile="$(mktemp)"
+  local tmpfile
+  tmpfile="$(mktemp)"
 
   mark_bootstrap_step "$tmpfile" "packages_installed"
   grep -q "packages_installed" "$tmpfile"
