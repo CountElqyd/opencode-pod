@@ -58,8 +58,7 @@ ID=nixos
 EOF
 
   source lib/distro.sh
-  run detect_distro "$TESTDIR/os-release"
-  [ "$status" -eq 0 ]
+  detect_distro "$TESTDIR/os-release"
   [ "$DISTRO_ID" = "unknown" ]
   [[ "$DISTRO_INSTALL_CMD" == *"https://podman.io"* ]]
 }
@@ -133,7 +132,6 @@ VERSION="1.0"
 EOF
 
   source lib/distro.sh
-  run detect_distro "$TESTDIR/os-release"
-  [ "$status" -eq 0 ]
+  detect_distro "$TESTDIR/os-release"
   [ "$DISTRO_ID" = "unknown" ]
 }
