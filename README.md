@@ -261,8 +261,15 @@ interrupted, re-running resumes from the last checkpoint rather than starting ov
 
 - **Podman 4.3+** (rootless) — [install guide](https://podman.io/docs/installation)
 - **Bash 4+**
-- **Linux** — tested on Arch, Fedora, Ubuntu/Debian
 - **No sudo needed** — everything runs rootless
+
+### OS Compatibility
+
+| OS      | Status                        |
+|---------|-------------------------------|
+| Linux   | Fully supported (primary target) — tested on Arch, Fedora, Ubuntu/Debian |
+| Windows | Supported via **WSL2** (install Podman inside the WSL2 distro) |
+| macOS   | Not natively supported — use Podman machine or a Linux VM |
 
 ---
 
