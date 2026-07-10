@@ -42,6 +42,7 @@ teardown() {
   local testdir
   testdir="$(mktemp -d)"
   cp -r "$BATS_TEST_DIRNAME/../profiles/ralph" "$testdir/ralph"
+  rm -rf "$testdir/ralph/src"
   run bash "$testdir/ralph/build.sh"
   [ "$status" -ne 0 ]
   rm -rf "$testdir"
