@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "read": {
+      "deny": ["**/.ssh/**", "**/*.pem", "**/aws/**", "**/.env", "**/*.key"]
+    },
+    "edit": {
+      "deny": ["**/.ssh/**", "**/*.pem", "**/aws/**", "**/.env", "**/*.key"]
+    },
+    "bash": {
+      "deny": ["wget", "curl -o", "curl --output"]
+    }
+  }
+}
