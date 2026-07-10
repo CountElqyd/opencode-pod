@@ -12,7 +12,7 @@ setup_file() {
 }
 
 teardown_file() {
-  rm -rf "$BATS_TEST_DIRNAME_TARBALL"
+  [[ -n "${BATS_TEST_DIRNAME_TARBALL:-}" ]] && rm -rf "$BATS_TEST_DIRNAME_TARBALL"
 }
 
 setup() {
@@ -26,22 +26,25 @@ teardown() {
 }
 
 @test "build.sh creates a valid gzip tarball" {
-  run bash profiles/ralph/build.sh
+  local testdir
+  testdir="$(mktemp -d)"
+  cp -r "$BATS_TEST_DIRNAME/../profiles/ralph" "$testdir/ralph"
+  mkdir -p "$testdir/ralph/src"
+  run bash "$testdir/ralph/build.sh"
   [ "$status" -eq 0 ]
-  [ -f "profiles/ralph/ralph.tar.gz" ]
-  file_output=$(file "profiles/ralph/ralph.tar.gz")
+  [ -f "$testdir/ralph/ralph.tar.gz" ]
+  file_output=$(file "$testdir/ralph/ralph.tar.gz")
   echo "$file_output" | grep -q "gzip compressed data"
+  rm -rf "$testdir"
 }
 
 @test "build.sh fails when src/ is missing" {
-  if [ -d "profiles/ralph/src" ]; then
-    mv profiles/ralph/src profiles/ralph/src.bak
-  fi
-  run bash profiles/ralph/build.sh
+  local testdir
+  testdir="$(mktemp -d)"
+  cp -r "$BATS_TEST_DIRNAME/../profiles/ralph" "$testdir/ralph"
+  run bash "$testdir/ralph/build.sh"
   [ "$status" -ne 0 ]
-  if [ -d "profiles/ralph/src.bak" ]; then
-    mv profiles/ralph/src.bak profiles/ralph/src
-  fi
+  rm -rf "$testdir"
 }
 
 @test "setup.sh extracts tarball and copies config" {
