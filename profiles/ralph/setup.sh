@@ -13,15 +13,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# ---- Idempotency guard ----
-VERSION=$(tar xzOf "$TARBALL" VERSION 2>/dev/null || echo "0.0.0")
-INSTALLED=$(cat "$HOME/.ralph-version" 2>/dev/null || echo "0.0.0")
-
-if [ "$INSTALLED" = "$VERSION" ]; then
-  echo "Ralph profile v$VERSION already installed"
-  exit 0
-fi
-
 # ---- Environment validation ----
 if [ ! -f "$TARBALL" ]; then
   echo "Error: $TARBALL not found" >&2
@@ -31,6 +22,15 @@ fi
 if [ ! -d "$HOME" ]; then
   echo "Error: HOME ($HOME) does not exist" >&2
   exit 1
+fi
+
+# ---- Idempotency guard ----
+VERSION=$(tar xzOf "$TARBALL" VERSION 2>/dev/null || echo "0.0.0")
+INSTALLED=$(cat "$HOME/.ralph-version" 2>/dev/null || echo "0.0.0")
+
+if [ "$INSTALLED" = "$VERSION" ]; then
+  echo "Ralph profile v$VERSION already installed"
+  exit 0
 fi
 
 echo "Installing Ralph profile v$VERSION..."

@@ -3,12 +3,14 @@
 setup_file() {
   TESTDIR="$(mktemp -d)"
   export BATS_TEST_DIRNAME_TARBALL="$TESTDIR"
-  mkdir -p "$TESTDIR/tarball-src/config" "$TESTDIR/tarball-src/skills" "$TESTDIR/tarball-src/agents"
-  echo '{"permissions":{}}' > "$TESTDIR/tarball-src/config/opencode.json"
-  echo "# test skill" > "$TESTDIR/tarball-src/skills/test.md"
-  echo "# test agent" > "$TESTDIR/tarball-src/agents/test.md"
+  mkdir -p "$TESTDIR/src/config" "$TESTDIR/src/skills" "$TESTDIR/src/agents"
+  echo '{"permissions":{}}' > "$TESTDIR/src/config/opencode.json"
+  echo "# test skill" > "$TESTDIR/src/skills/test.md"
+  echo "# test agent" > "$TESTDIR/src/agents/test.md"
   echo "0.1.0" > "$TESTDIR/VERSION"
-  tar czf "$TESTDIR/ralph.tar.gz" -C "$TESTDIR" tarball-src/ VERSION
+  tar czf "$TESTDIR/ralph.tar.gz" \
+    -C "$TESTDIR/src" config/ skills/ agents/ \
+    -C "$TESTDIR" VERSION
 }
 
 teardown_file() {
@@ -49,41 +51,35 @@ teardown() {
 }
 
 @test "setup.sh extracts tarball and copies config" {
-  cat > "$BATS_TEST_DIRNAME_TARBALL/setup.sh" <<'SCRIPT'
-#!/usr/bin/env bash
-set -euo pipefail
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-EXTRACT_DIR="$(mktemp -d)"
-tar xzf "$SCRIPT_DIR/ralph.tar.gz" -C "$EXTRACT_DIR"
-mkdir -p "$HOME/.config/opencode"
-cp -r "$EXTRACT_DIR/tarball-src/config/opencode.json" "$HOME/.config/opencode/"
-VERSION=$(cat "$EXTRACT_DIR/VERSION" 2>/dev/null || echo "0.0.0")
-echo "$VERSION" > "$HOME/.ralph-version"
-rm -rf "$EXTRACT_DIR"
-SCRIPT
-  run bash "$BATS_TEST_DIRNAME_TARBALL/setup.sh"
+  local profiledir
+  profiledir="$(mktemp -d)"
+  cp "$BATS_TEST_DIRNAME_TARBALL/ralph.tar.gz" "$profiledir/ralph.tar.gz"
+  cp "$BATS_TEST_DIRNAME/../profiles/ralph/setup.sh" "$profiledir/setup.sh"
+  chmod +x "$profiledir/setup.sh"
+
+  run bash "$profiledir/setup.sh"
+  echo "status=$status output=$output"
   [ "$status" -eq 0 ]
   [ -f "$HOME/.config/opencode/opencode.json" ]
   [ -f "$HOME/.ralph-version" ]
   [ "$(cat "$HOME/.ralph-version")" = "0.1.0" ]
+  rm -rf "$profiledir"
 }
 
 @test "setup.sh idempotency guard skips when already installed" {
   echo "0.1.0" > "$HOME/.ralph-version"
   echo "original" > "$HOME/.config/opencode/opencode.json"
-  cat > "$BATS_TEST_DIRNAME_TARBALL/setup.sh" <<'SCRIPT'
-#!/usr/bin/env bash
-set -euo pipefail
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION=$(tar xzf "$SCRIPT_DIR/ralph.tar.gz" --to-stdout VERSION 2>/dev/null || echo "0.0.0")
-_INSTALLED=$(cat "$HOME/.ralph-version" 2>/dev/null || echo "0.0.0")
-if [ "$_INSTALLED" = "$VERSION" ]; then
-  echo "Profile ralph v$VERSION already installed"
-  exit 0
-fi
-echo "original" > "$HOME/.config/opencode/opencode.json"
-SCRIPT
-  run bash "$BATS_TEST_DIRNAME_TARBALL/setup.sh"
+
+  local profiledir
+  profiledir="$(mktemp -d)"
+  cp "$BATS_TEST_DIRNAME_TARBALL/ralph.tar.gz" "$profiledir/ralph.tar.gz"
+  cp "$BATS_TEST_DIRNAME/../profiles/ralph/setup.sh" "$profiledir/setup.sh"
+  chmod +x "$profiledir/setup.sh"
+
+  run bash "$profiledir/setup.sh"
+  echo "status=$status output=$output"
   [ "$status" -eq 0 ]
   [[ "$output" == *"already installed"* ]]
+  [ "$(cat "$HOME/.config/opencode/opencode.json")" = "original" ]
+  rm -rf "$profiledir"
 }
