@@ -23,6 +23,8 @@ source "${LIB_DIR}/distro.sh"
 source "${LIB_DIR}/podman.sh"
 # shellcheck disable=SC1091
 source "${LIB_DIR}/security.sh"
+# shellcheck disable=SC1091
+source "${LIB_DIR}/profiles.sh"
 
 usage() {
   cat << 'EOF'
@@ -37,6 +39,7 @@ Commands:
   status     Show container state, project path
   doctor     Health check: podman, image, SELinux, disk space
   upgrade    Check base image freshness, install new packages from TOML
+  profile    Manage OpenCode profiles (list, info, install, update)
 
 Options:
   --help     Show this message
@@ -291,6 +294,14 @@ case "${1:-}" in
   status)   shift; cmd_status "$@" ;;  
   doctor)   shift; cmd_doctor "$@" ;;
   upgrade)  shift; cmd_upgrade "$@" ;;
+  profile)  shift; cmd="${1:-}"; shift 2>/dev/null || true
+            case "$cmd" in
+              list)    cmd_profile_list ;;
+              info)    cmd_profile_info "$@" ;;
+              install) cmd_profile_install "$@" ;;
+              update)  cmd_profile_update "$@" ;;
+              *)       printf 'Usage: opencode-pod profile <list|info|install|update>\n'; exit 1 ;;
+            esac ;;
   --help|-h) usage ;;
   "")       usage ;;
   *)        printf 'Unknown command: %s\n' "$1"; usage; exit 1 ;;
