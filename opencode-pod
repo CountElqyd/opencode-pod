@@ -296,7 +296,7 @@ case "${1:-}" in
   upgrade)  shift; cmd_upgrade "$@" ;;
   profile)  shift; cmd="${1:-}"; shift 2>/dev/null || true
             case "$cmd" in
-              list)    cmd_profile_list ;;
+              list)    cmd_profile_list "$@" ;;
               info)    cmd_profile_info "$@" ;;
               install) cmd_profile_install "$@" ;;
               update)  cmd_profile_update "$@" ;;
