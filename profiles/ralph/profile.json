@@ -1,0 +1,15 @@
+{
+  "name": "ralph",
+  "version": "0.2.0",
+  "description": "Full GSD-Core + G-Stack ecosystem for autonomous development",
+  "author": "Ralph",
+  "components": {
+    "skills": 123,
+    "agents": 37,
+    "commands": 69,
+    "fabric_mcp": true,
+    "gsd_core": "1.5.0"
+  },
+  "requires": ["nodejs", "npm", "python3"],
+  "network": "host"
+}

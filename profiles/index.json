@@ -1,0 +1,11 @@
+{
+  "format_version": 1,
+  "profiles": [
+    {
+      "name": "ralph",
+      "version": "0.2.0",
+      "description": "Full GSD-Core + G-Stack ecosystem for autonomous development",
+      "path": "profiles/ralph/"
+    }
+  ]
+}
