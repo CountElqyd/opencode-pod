@@ -80,6 +80,13 @@ teardown() {
   [[ "$output" == *"Usage"* ]]
 }
 
+@test "cmd_profile_info rejects invalid name" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run cmd_profile_info "ralph space"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Invalid profile name"* ]]
+}
+
 @test "cmd_profile_info unknown profile" {
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
   curl() { return 1; }
@@ -91,37 +98,21 @@ teardown() {
 
 @test "cmd_profile_info displays metadata" {
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
-  curl() { printf '{"name":"ralph","version":"1.0.0","description":"Ralph profile","author":"Test","components":{"skills":true,"agents":false,"commands":"custom","fabric_mcp":true,"gsd_core":false},"requires":["git"],"network":"host"}'; return 0; }
-  python3() {
-    cat <<'PYEOF'
-Profile:            ralph
-Version:            1.0.0
-Description:        Ralph profile
-Author:             Test
-Components:
-  Skills:           true
-  Agents:           false
-  Commands:         custom
-  Fabric MCP:       true
-  GSD Core:         false
-Requires:           git
-Network:            host
-PYEOF
+  curl() {
+    printf '{"name":"ralph","version":"0.2.0","description":"Test","author":"Ralph","components":{"skills":5,"agents":3,"commands":2,"fabric_mcp":true,"gsd_core":"1.0.0"},"requires":["nodejs"],"network":"host"}'
     return 0
   }
+  python3() { command python3 "$@"; }
   export -f curl python3
-  run cmd_profile_info "ralph"
+
+  run cmd_profile_info ralph
   [ "$status" -eq 0 ]
   [[ "$output" == *"ralph"* ]]
-  [[ "$output" == *"1.0.0"* ]]
-  [[ "$output" == *"Ralph profile"* ]]
+  [[ "$output" == *"0.2.0"* ]]
   [[ "$output" == *"Test"* ]]
-  [[ "$output" == *"true"* ]]
-  [[ "$output" == *"false"* ]]
-  [[ "$output" == *"custom"* ]]
-  [[ "$output" == *"Requires"* ]]
-  [[ "$output" == *"git"* ]]
-  [[ "$output" == *"Network"* ]]
+  [[ "$output" == *"Ralph"* ]]
+  [[ "$output" == *"5"* ]]
+  [[ "$output" == *"3"* ]]
   [[ "$output" == *"host"* ]]
 }
 
@@ -132,6 +123,13 @@ PYEOF
   run cmd_profile_install
   [ "$status" -eq 1 ]
   [[ "$output" == *"Usage"* ]]
+}
+
+@test "cmd_profile_install rejects invalid name" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run cmd_profile_install "../evil"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Invalid profile name"* ]]
 }
 
 @test "cmd_profile_install already installed" {
@@ -192,6 +190,26 @@ PYEOF
   [ ! -d "./profiles/ralph" ]
 }
 
+@test "cmd_profile_install setup.sh download failure cleans up" {
+  cd "$TESTDIR"
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  curl() {
+    case "$*" in
+      *profile.json*) printf '{"name":"ralph","version":"0.2.0"}' ;;
+      *ralph.tar.gz*) printf 'fake-tarball' > "$TESTDIR/profiles/ralph/ralph.tar.gz" ;;
+      *setup.sh*) return 1 ;;
+    esac
+    return 0
+  }
+  python3() { command python3 "$@"; }
+  export -f curl python3
+
+  run cmd_profile_install ralph
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Failed to download"* ]]
+  [ ! -d "$TESTDIR/profiles/ralph" ]
+}
+
 # --- cmd_profile_update ---
 
 @test "cmd_profile_update requires name" {
@@ -199,6 +217,13 @@ PYEOF
   run cmd_profile_update
   [ "$status" -eq 1 ]
   [[ "$output" == *"Usage"* ]]
+}
+
+@test "cmd_profile_update rejects invalid name" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run cmd_profile_update "ralph space"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Invalid profile name"* ]]
 }
 
 @test "cmd_profile_update not installed" {
@@ -229,4 +254,17 @@ PYEOF
   [[ "$output" == *"Profile 'ralph' updated"* ]]
   [ -x "./profiles/ralph/setup.sh" ]
   [ -f "./profiles/ralph/ralph.tar.gz" ]
+}
+
+@test "cmd_profile_update tarball download failure" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  mkdir -p "$TESTDIR/profiles/ralph"
+  cd "$TESTDIR"
+
+  curl() { return 1; }
+  export -f curl
+
+  run cmd_profile_update ralph
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Failed to download"* ]]
 }

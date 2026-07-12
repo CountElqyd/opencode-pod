@@ -94,7 +94,8 @@ for key, label in comp_labels.items():
             val = "true" if val else "false"
         print(f"  {label:<16} {val}")
 if requires:
-    print(f"Requires:           {\", \".join(requires)}")
+    _comma = ", "
+    print(f"Requires:           {_comma.join(requires)}")
 if network:
     print(f"Network:            {network}")
 ' || {
