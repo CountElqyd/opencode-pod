@@ -49,7 +49,7 @@ cmd_profile_info() {
   fi
   if [[ ! "$name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
     printf 'Error: Invalid profile name. Use alphanumeric, dash, underscore.\n' >&2
-    return 1
+    exit 1
   fi
 
   local url
@@ -115,7 +115,7 @@ cmd_profile_install() {
   fi
   if [[ ! "$name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
     printf 'Error: Invalid profile name. Use alphanumeric, dash, underscore.\n' >&2
-    return 1
+    exit 1
   fi
 
   if [[ -d "./profiles/${name}" ]]; then
@@ -170,7 +170,7 @@ print(data.get("network", ""))
     read -r response
     if [[ "$response" =~ ^[yY] ]]; then
       if [[ -f "opencode-pod.toml" ]]; then
-        sed -i 's/mode = "bridge"/mode = "host"/' "opencode-pod.toml"
+        sed -i '/^\[network\]/,/^\[/{s/mode = "bridge"/mode = "host"/}' "opencode-pod.toml"
         printf 'Updated network mode to host in opencode-pod.toml.\n'
       else
         printf 'No opencode-pod.toml found. Set [network] mode = "host" manually.\n' >&2
@@ -191,7 +191,7 @@ cmd_profile_update() {
   fi
   if [[ ! "$name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
     printf 'Error: Invalid profile name. Use alphanumeric, dash, underscore.\n' >&2
-    return 1
+    exit 1
   fi
 
   if [[ ! -d "./profiles/${name}" ]]; then
