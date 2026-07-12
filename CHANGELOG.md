@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.0] - 2026-07-13
+
+### Features
+- `profile` subcommand with 4 operations: list, info, install, update
+- Reusable environment profiles system (`profiles/<name>/` convention)
+- Ralph profile: bundles GSD-Core, G-Stack skills, and fabric-mcp server
+- Profile index served from GitHub fetched at runtime
+- Host network mode prompt for profiles that need local LLM access
+- 78 new bats tests for profile subcommands and ralph profile
+
+### CI
+- Profile tarball freshness check on push/PR — stale tarballs fail CI
+
 ## [0.1.0] - 2026-07-07
 
 Initial release.

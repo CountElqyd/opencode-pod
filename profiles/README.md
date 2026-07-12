@@ -29,6 +29,15 @@ cp -r profiles/ralph profiles/my-profile
 cd profiles/my-profile && bash build.sh
 ```
 
+## Built-in profile: `ralph`
+
+The `ralph/` profile bundles the full GSD-Core + G-Stack ecosystem plus an optional
+[ralph-loop-v2](ralph/src/skills/ralph-loop-v2/) orchestration skill for autonomous build-loop
+execution (plan → gate → execute → verify → ship). It also includes a pre-built
+[fabric-mcp](ralph/src/fabric-mcp/) MCP server for Fabric AI pattern integration.
+
+See `profiles/ralph/src/config/opencode.json` for the reference permission model.
+
 ## Versioning
 
 Each profile has its own `VERSION` file. `setup.sh` checks the version before applying — if the installed version matches, it skips re-installation (idempotency guard).

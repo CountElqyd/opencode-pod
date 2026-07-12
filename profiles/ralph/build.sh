@@ -18,7 +18,7 @@ fi
 
 echo "Building Ralph profile v$(cat "$SCRIPT_DIR/VERSION")..."
 tar czf "$OUTPUT" \
-  -C "$SRC_DIR" config/ skills/ agents/ fabric-mcp/ \
+  -C "$SRC_DIR" config/ skills/ agents/ commands/ fabric-mcp/ gsd-core/ \
   -C "$SCRIPT_DIR" VERSION
 
 echo "Created: $OUTPUT ($(du -h "$OUTPUT" | cut -f1))"

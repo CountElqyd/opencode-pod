@@ -1,13 +1,120 @@
 {
-  "permissions": {
-    "read": {
-      "deny": ["**/.ssh/**", "**/*.pem", "**/aws/**", "**/.env", "**/*.key"]
+  "$schema": "https://opencode.ai/config.json",
+  "autoupdate": false,
+  "small_model": "llama.cpp/jica98/qwen3.5-4B-super-coder:Q4_0",
+  "lsp": true,
+  "plugin": ["superpowers@git+https://github.com/obra/superpowers.git"],
+  "mcp": {
+    "fabric": {
+      "type": "local",
+      "command": ["node", "/home/dev/.local/share/fabric-mcp/dist/index.js"],
+      "environment": {
+        "FABRIC_PATH": "/home/dev/.local/bin/fabric-ai"
+      }
+    }
+  },
+  "permission": {
+    "external_directory": { "*": "allow" },
+    "bash": {
+      "*": "allow",
+      "sudo *": "deny",
+      "su *": "deny",
+      "env": "deny",
+      "printenv *": "deny",
+      "rm -rf *": "deny",
+      "rm -r *": "deny",
+      "rm --recursive*": "deny",
+      "git push --force*": "deny",
+      "git push -f*": "deny",
+      "git reset --hard*": "deny",
+      "git clean -fd*": "deny",
+      "git clean -f*": "deny",
+      "git config alias*": "deny",
+      "npm publish*": "deny",
+      "npm publish": "deny",
+      "pip install --system*": "deny",
+      "pip3 install --system*": "deny",
+      "chmod 777 *": "deny",
+      "apt *": "deny",
+      "apt-get *": "deny",
+      "brew install *": "deny",
+      "yum *": "deny",
+      "dnf *": "deny",
+      "pacman *": "deny",
+      "curl * | bash": "deny",
+      "curl * | sh": "deny",
+      "wget * | bash": "deny",
+      "wget * | sh": "deny"
     },
     "edit": {
-      "deny": ["**/.ssh/**", "**/*.pem", "**/aws/**", "**/.env", "**/*.key"]
+      "*": "allow",
+      "~/.ssh/**": "deny",
+      "~/.aws/**": "deny",
+      "~/.gnupg/**": "deny",
+      "~/.config/opencode/opencode.json*": "deny",
+      "~/.config/opencode/opencode.jsonc": "deny",
+      "/etc/**": "deny",
+      "/usr/**": "deny",
+      "/bin/**": "deny",
+      "/sbin/**": "deny",
+      "/boot/**": "deny",
+      "/sys/**": "deny",
+      "/proc/**": "deny",
+      "/dev/**": "deny",
+      "*id_rsa*": "deny",
+      "*.pem": "deny",
+      "*.key": "deny"
     },
-    "bash": {
-      "deny": ["wget", "curl -o", "curl --output"]
+    "read": {
+      "*": "allow",
+      "*.env": "deny",
+      "*.env.*": "deny",
+      "*.env.example": "allow",
+      "~/.ssh/**": "deny",
+      "~/.aws/**": "deny",
+      "~/.gnupg/**": "deny",
+      "~/.config/opencode/opencode.json*": "deny",
+      "~/.config/opencode/opencode.jsonc": "deny",
+      "~/.local/share/opencode/auth.json": "deny",
+      "*id_rsa*": "deny",
+      "*.pem": "deny",
+      "*.key": "deny",
+      "/etc/shadow*": "deny",
+      "/etc/passwd*": "deny"
+    },
+    "webfetch": "allow",
+    "websearch": "allow",
+    "doom_loop": "allow",
+    "task": { "*": "allow" }
+  },
+  "compaction": {
+    "auto": true,
+    "reserved": 10000
+  },
+  "agent": {
+    "build": {
+      "permission": {
+        "webfetch": "allow",
+        "websearch": "allow"
+      }
+    }
+  },
+  "provider": {
+    "llama.cpp": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "llama-server (local)",
+      "options": {
+        "baseURL": "http://127.0.0.1:8080/v1"
+      },
+      "models": {
+        "jica98/qwen3.5-4B-super-coder:Q4_0": {
+          "name": "Qwen3.5-4B-SuperCoder (local)",
+          "limit": {
+            "context": 32768,
+            "output": 4096
+          }
+        }
+      }
     }
   }
 }

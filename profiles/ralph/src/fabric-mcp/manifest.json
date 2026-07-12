@@ -1,0 +1,41 @@
+{
+  "manifest_version": "0.3",
+  "name": "fabric-mcp",
+  "display_name": "Fabric AI Patterns",
+  "version": "1.0.0",
+  "description": "Access Daniel Miessler's Fabric AI patterns for content analysis, summarization, learning, coding, and security analysis",
+  "author": {
+    "name": "Martin Zardecki",
+    "url": "https://github.com/mpzarde"
+  },
+  "homepage": "https://github.com/mpzarde/fabric-mcp",
+  "icon": "icon.png",
+  "user_config": {
+    "fabricPath": {
+      "type": "string",
+      "title": "Fabric Executable Path",
+      "description": "Path to the fabric executable. Leave empty for auto-detection.",
+      "default": "",
+      "required": false
+    },
+    "ytdlpPath": {
+      "type": "string",
+      "title": "yt-dlp Executable Path",
+      "description": "Path to the yt-dlp executable. Leave empty for auto-detection.",
+      "default": "",
+      "required": false
+    }
+  },
+  "server": {
+    "type": "node",
+    "entry_point": "dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dist/index.js"],
+      "env": {
+        "FABRIC_PATH": "${user_config.fabricPath}",
+        "YTDLP_PATH": "${user_config.ytdlpPath}"
+      }
+    }
+  }
+}

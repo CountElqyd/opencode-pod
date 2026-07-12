@@ -61,6 +61,21 @@ if [ -d "$EXTRACTED/agents" ]; then
   echo "  Agents: installed"
 fi
 
+# ---- Copy commands ----
+if [ -d "$EXTRACTED/commands" ]; then
+  mkdir -p "$HOME/.config/opencode/command"
+  cp -r "$EXTRACTED/commands/"* "$HOME/.config/opencode/command/" 2>/dev/null
+  echo "  Commands: installed"
+fi
+
+# ---- Install GSD-Core ----
+if [ -d "$EXTRACTED/gsd-core" ]; then
+  GSD_DIR="$HOME/.config/opencode/gsd-core"
+  mkdir -p "$GSD_DIR"
+  cp -r "$EXTRACTED/gsd-core/"* "$GSD_DIR/" 2>/dev/null
+  echo "  GSD-Core: installed"
+fi
+
 # ---- Install fabric-mcp ----
 if [ -d "$EXTRACTED/fabric-mcp" ]; then
   FABRIC_DIR="$HOME/.local/share/fabric-mcp"
@@ -68,9 +83,23 @@ if [ -d "$EXTRACTED/fabric-mcp" ]; then
   cp -r "$EXTRACTED/fabric-mcp/"* "$FABRIC_DIR/" 2>/dev/null
   if command -v npm &>/dev/null && [ -f "$FABRIC_DIR/package.json" ]; then
     echo "  fabric-mcp: installing dependencies..."
-    (cd "$FABRIC_DIR" && npm install --silent) || echo "  Warning: fabric-mcp npm install failed" >&2
+    (cd "$FABRIC_DIR" && npm install --silent) || {
+      echo "  Warning: fabric-mcp npm install failed" >&2
+      rm -f "$HOME/.ralph-version" 2>/dev/null
+    }
   fi
   echo "  fabric-mcp: installed"
+fi
+
+# ---- Install fabric-ai CLI ----
+if command -v pip3 &>/dev/null; then
+  echo "  fabric-ai: installing..."
+  pip3 install --user fabric-ai &>/dev/null && echo "  fabric-ai: installed" || echo "  Warning: fabric-ai install failed" >&2
+elif command -v uv &>/dev/null; then
+  echo "  fabric-ai: installing via uv..."
+  uv pip install --system fabric-ai &>/dev/null && echo "  fabric-ai: installed" || echo "  Warning: fabric-ai install failed" >&2
+else
+  echo "  Warning: fabric-ai not installed (neither pip3 nor uv available)" >&2
 fi
 
 # ---- Record version ----
