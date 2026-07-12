@@ -3,8 +3,6 @@
 # Commands: list, info, install, update.
 # Sourced by the main opencode-pod CLI entry point.
 
-set -euo pipefail
-
 OPCODE_POD_REPO="${OPCODE_POD_REPO:-CountElqyd/opencode-pod}"
 OPCODE_POD_VERSION="${OPCODE_POD_VERSION:-main}"
 
@@ -48,6 +46,10 @@ cmd_profile_info() {
   if [[ -z "$name" ]]; then
     printf 'Usage: opencode-pod profile info <name>\n' >&2
     exit 1
+  fi
+  if [[ ! "$name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+    printf 'Error: Invalid profile name. Use alphanumeric, dash, underscore.\n' >&2
+    return 1
   fi
 
   local url
@@ -110,6 +112,10 @@ cmd_profile_install() {
     printf 'Usage: opencode-pod profile install <name>\n' >&2
     exit 1
   fi
+  if [[ ! "$name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+    printf 'Error: Invalid profile name. Use alphanumeric, dash, underscore.\n' >&2
+    return 1
+  fi
 
   if [[ -d "./profiles/${name}" ]]; then
     printf "Already installed. Run 'opencode-pod profile update %s' to re-download.\n" "$name" >&2
@@ -158,7 +164,7 @@ print(data.get("network", ""))
 
   chmod +x "./profiles/${name}/setup.sh"
 
-  if [[ "$network_mode" == "host" ]]; then
+  if [[ "$network_mode" == "host" && -t 0 ]]; then
     printf 'Profile requires host networking. Update opencode-pod.toml? [y/N]: '
     read -r response
     if [[ "$response" =~ ^[yY] ]]; then
@@ -181,6 +187,10 @@ cmd_profile_update() {
   if [[ -z "$name" ]]; then
     printf 'Usage: opencode-pod profile update <name>\n' >&2
     exit 1
+  fi
+  if [[ ! "$name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+    printf 'Error: Invalid profile name. Use alphanumeric, dash, underscore.\n' >&2
+    return 1
   fi
 
   if [[ ! -d "./profiles/${name}" ]]; then
