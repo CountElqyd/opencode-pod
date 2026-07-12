@@ -136,6 +136,10 @@ triggers or post-install warnings). Every package is individually verified with
 | Check which containers are alive | `opencode-pod status`     | Shows state, project path, image               |
 | Health check your setup          | `opencode-pod doctor`     | Checks Podman, image, SELinux, disk space. `--fix` |
 | Update tools in the container    | `opencode-pod upgrade`    | Checks image freshness (30-day). `--pull` to refresh |
+| List available profiles          | `opencode-pod profile list` | Fetches profile index from GitHub             |
+| Show profile details             | `opencode-pod profile info <name>` | Displays version, components, requirements |
+| Download a profile               | `opencode-pod profile install <name>` | Saves to `./profiles/<name>/` |
+| Re-download a profile            | `opencode-pod profile update <name>` | Re-fetches latest tarball + setup.sh |
 | Destroy everything, start fresh  | `opencode-pod destroy`    | Removes container + home volume               |
 
 ---
@@ -154,6 +158,54 @@ installs the appropriate toolchain:
 | *(none detected)*       | Default   | `git`, `openssh`, `curl`                     |
 
 All profiles also include `zsh`, `bash`, `vim`, and `libstdc++` as base packages.
+
+### Profile Management
+
+`opencode-pod` can discover, download, and manage reusable OpenCode environment
+profiles (skills, agents, config, tooling) from the project's GitHub repo:
+
+```sh
+# List available profiles
+opencode-pod profile list
+
+# Show profile details
+opencode-pod profile info ralph
+
+# Download a profile to the current project
+opencode-pod profile install ralph
+
+# Re-download the latest version
+opencode-pod profile update ralph
+```
+
+Profiles are downloaded to `./profiles/<name>/`. Inside the container, run the
+profile's `setup.sh` to install it:
+
+```sh
+bash /workspace/profiles/ralph/setup.sh
+```
+
+Profiles can be committed to your repo (pinning a version for your team) or
+gitignored (each developer installs independently) — either works.
+
+Some profiles (like `ralph`) recommend host networking for local LLM access.
+When installing such a profile, `opencode-pod` prompts to update
+`opencode-pod.toml` automatically.
+
+### Reusable Environment Profiles
+
+The `profiles/` directory contains pre-packaged OpenCode environments
+(skills, agents, config, tooling) that can be installed inside any
+opencode-pod container with a single command:
+
+```sh
+bash /opencode-pod/profiles/<name>/setup.sh
+```
+
+The [`ralph`](profiles/ralph) profile is the reference — it bundles GSD-Core,
+G-Stack skills, and a fabric-mcp server.
+See [`profiles/README.md`](profiles/README.md) for the convention and how to
+create custom profiles.
 
 ---
 
