@@ -87,7 +87,7 @@ mkdir -p "$DEST_DIR/share/opencode-pod/example"
 
 install_file "opencode-pod" "$DEST_DIR/bin/opencode-pod" "exec"
 
-for libfile in distro.sh podman.sh security.sh toml.sh; do
+for libfile in distro.sh podman.sh security.sh toml.sh profiles.sh; do
   install_file "lib/$libfile" "$DEST_DIR/share/opencode-pod/lib/$libfile"
 done
 
