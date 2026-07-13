@@ -40,6 +40,7 @@ if [[ -f /etc/os-release ]]; then
     source "$DISTRO_SH" 2>/dev/null || true
     rm -f "$DISTRO_SH"
   fi
+  # shellcheck disable=SC2119
   detect_distro 2>/dev/null || true
   if [[ "${DISTRO_ID:-unknown}" != "unknown" ]]; then
     printf 'Detected: %s\n' "$DISTRO_ID"
