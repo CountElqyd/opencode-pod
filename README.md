@@ -17,7 +17,8 @@
 - [Quick Start](#quick-start)
 - [How It Works](#how-it-works)
 - [All Commands](#all-commands)
-- [Auto-Detection Profiles](#auto-detection-profiles)
+- [Profile Management](#profile-management)
+- [Auto-Detection](#auto-detection)
 - [Security](#security)
 - [Configuration](#configuration)
 - [Error Recovery](#error-recovery)
@@ -88,13 +89,13 @@ opencode-pod destroy    # wipe container + volume
 ┌──────┐    ┌───────┐    ┌───────┐    ┌─────────┐    ┌─────────┐
 │ init │───▶│ setup │───▶│ start │───▶│  work   │───▶│  stop   │
 └──────┘    └───────┘    └───────┘    │(exit)   │    └─────────┘
-                                      └─────────┘         │
-                                           │              │
-                                           ▼              ▼
-                                     ┌─────────┐    ┌───────────┐
-                                     │  start  │    │  destroy  │
-                                     │(resume) │    │(wipe all) │
-                                     └─────────┘    └───────────┘
+                                       └─────────┘         │
+                                            │              │
+                                            ▼              ▼
+                                      ┌─────────┐    ┌───────────┐
+                                      │  start  │    │  destroy  │
+                                      │(resume) │    │(wipe all) │
+                                      └─────────┘    └───────────┘
 ```
 
 ### Container Naming
@@ -144,25 +145,13 @@ triggers or post-install warnings). Every package is individually verified with
 
 ---
 
-## Auto-Detection Profiles
+## Profile Management
 
-When no TOML config exists, `opencode-pod start` detects your project type and
-installs the appropriate toolchain:
+`opencode-pod` can discover, download, and manage reusable OpenCode environments
+(skills, agents, config, tooling) from the project's GitHub repo. Profiles let
+you ship a pre-configured agent environment alongside your project code.
 
-| Detected file           | Profile   | Packages installed                          |
-|-------------------------|-----------|----------------------------------------------|
-| `package.json`          | Node.js   | `nodejs`, `npm`, `git`, `openssh`            |
-| `pyproject.toml` or `requirements.txt` | Python | `python3`, `uv`, `git`, `openssh`  |
-| `Cargo.toml`            | Rust      | `rust`, `cargo`, `git`, `openssh`            |
-| `go.mod`                | Go        | `go`, `git`, `openssh`                       |
-| *(none detected)*       | Default   | `git`, `openssh`, `curl`                     |
-
-All profiles also include `zsh`, `bash`, `vim`, and `libstdc++` as base packages.
-
-### Profile Management
-
-`opencode-pod` can discover, download, and manage reusable OpenCode environment
-profiles (skills, agents, config, tooling) from the project's GitHub repo:
+### Commands
 
 ```sh
 # List available profiles
@@ -185,27 +174,65 @@ profile's `setup.sh` to install it:
 bash /workspace/profiles/ralph/setup.sh
 ```
 
-Profiles can be committed to your repo (pinning a version for your team) or
-gitignored (each developer installs independently) — either works.
+### How Profiles Work
 
-Some profiles (like `ralph`) recommend host networking for local LLM access.
-When installing such a profile, `opencode-pod` prompts to update
-`opencode-pod.toml` automatically.
+Each profile in the repository has a `profiles/<name>/` directory containing:
+
+| File | Purpose |
+|------|---------|
+| `profile.json` | Metadata (name, version, components, requirements, network mode) |
+| `setup.sh` | Installs the profile inside the container |
+| `<name>.tar.gz` | Packaged source files (built by `build.sh`) |
+| `build.sh` | Rebuilds the tarball from `src/` |
+| `VERSION` | Semver checked by `setup.sh` for idempotency |
+
+The global `profiles/index.json` acts as a discoverable registry — `opencode-pod profile list` fetches it from GitHub and displays all available profiles.
 
 ### Reusable Environment Profiles
 
 The `profiles/` directory contains pre-packaged OpenCode environments
-(skills, agents, config, tooling) that can be installed inside any
-opencode-pod container with a single command:
+that can be installed inside any opencode-pod container:
 
 ```sh
 bash /opencode-pod/profiles/<name>/setup.sh
 ```
 
-The [`ralph`](profiles/ralph) profile is the reference — it bundles GSD-Core,
-G-Stack skills, and a fabric-mcp server.
-See [`profiles/README.md`](profiles/README.md) for the convention and how to
-create custom profiles.
+#### Ralph Profile
+
+The [`ralph`](profiles/ralph) profile is the reference — it bundles the full
+GSD-Core + G-Stack ecosystem (120+ skills, 37 agents, 69 commands), a pre-built
+fabric-mcp MCP server, and the ralph-loop-v2 orchestration skill for autonomous
+build-loop execution (plan → gate → execute → verify → ship).
+
+```sh
+# Install inside the container
+bash /workspace/profiles/ralph/setup.sh
+```
+
+See [`profiles/README.md`](profiles/README.md) for the profile convention and how to
+create custom profiles. Profiles can be committed to your repo (pinning a version
+for your team) or gitignored (each developer installs independently).
+
+Some profiles (like `ralph`) recommend host networking for local LLM access.
+When installing such a profile, `opencode-pod` prompts to update
+`opencode-pod.toml` automatically.
+
+---
+
+## Auto-Detection
+
+When no TOML config exists, `opencode-pod start` detects your project type and
+installs the appropriate toolchain:
+
+| Detected file           | Profile   | Packages installed                          |
+|-------------------------|-----------|----------------------------------------------|
+| `package.json`          | Node.js   | `nodejs`, `npm`, `git`, `openssh`            |
+| `pyproject.toml` or `requirements.txt` | Python | `python3`, `uv`, `git`, `openssh`  |
+| `Cargo.toml`            | Rust      | `rust`, `cargo`, `git`, `openssh`            |
+| `go.mod`                | Go        | `go`, `git`, `openssh`                       |
+| *(none detected)*       | Default   | `git`, `openssh`, `curl`                     |
+
+All profiles also include `zsh`, `bash`, `vim`, and `libstdc++` as base packages.
 
 ---
 
@@ -350,14 +377,19 @@ on push and PR.
 ### Structure
 
 ```
-opencode-pod          # main CLI entry point (287 lines)
+opencode-pod          # main CLI entry point (308 lines)
 lib/
   toml.sh             # TOML parser with mtime-based caching
   distro.sh           # OS detection (Arch/Fedora/Ubuntu)
   podman.sh           # Core lifecycle: create, setup, start, stop, destroy, bootstrap
   security.sh         # Hardening flags, opencode config path
+  profiles.sh         # Profile subcommands: list, info, install, update
 defaults/             # Default config template
 example/              # Annotated example configs
+profiles/
+  index.json          # Profile registry index
+  README.md           # Profile creation convention
+  ralph/              # Reference profile (GSD-Core + G-Stack)
 bats/                 # Test files
 docs/                 # Additional documentation
 ```
