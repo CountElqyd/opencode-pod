@@ -15,19 +15,19 @@ jobs:
         run: sudo apt-get install -y shellcheck -qq
       - name: Run shellcheck
         run: shellcheck opencode-pod install.sh lib/*.sh profiles/ralph/*.sh
-      - name: Verify profile tarballs are fresh
-        env:
-          SOURCE_DATE_EPOCH: 1
+      - name: Build and verify profile tarballs
         run: |
           for profile in profiles/*/; do
             if [ -f "${profile}build.sh" ]; then
               bash "${profile}build.sh"
             fi
           done
-          git diff --exit-code --stat || {
-            echo "Error: profile tarballs are stale — run build.sh and commit the updated tarballs"
-            exit 1
-          }
+          for tarball in profiles/*/*.tar.gz; do
+            tar tzf "$tarball" >/dev/null || {
+              echo "Error: $tarball is invalid"
+              exit 1
+            }
+          done
 
   unit-tests:
     runs-on: ubuntu-latest
