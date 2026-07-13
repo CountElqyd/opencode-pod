@@ -17,8 +17,8 @@ if [ ! -f "$SCRIPT_DIR/VERSION" ]; then
 fi
 
 echo "Building Ralph profile v$(cat "$SCRIPT_DIR/VERSION")..."
-tar czf "$OUTPUT" \
+tar cf - --sort=name --owner=0 --group=0 --mtime="@0" \
   -C "$SRC_DIR" config/ skills/ agents/ commands/ fabric-mcp/ gsd-core/ \
-  -C "$SCRIPT_DIR" VERSION
+  -C "$SCRIPT_DIR" VERSION | gzip -n > "$OUTPUT"
 
 echo "Created: $OUTPUT ($(du -h "$OUTPUT" | cut -f1))"
