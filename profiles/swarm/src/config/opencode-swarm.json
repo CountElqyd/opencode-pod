@@ -1,0 +1,25 @@
+{
+  "agents": {
+    "architect": {
+      "model": "opencode/deepseek-v4-flash-free"
+    },
+    "coder": {
+      "model": "opencode/deepseek-v4-flash-free"
+    },
+    "reviewer": {
+      "model": "opencode/deepseek-v4-flash-free"
+    },
+    "test_engineer": {
+      "model": "opencode/deepseek-v4-flash-free"
+    },
+    "explorer": {
+      "model": "opencode/deepseek-v4-flash-free"
+    }
+  },
+  "session_mode": "balanced",
+  "project_mode": "balanced",
+  "max_parallel_coders": 1,
+  "council": false,
+  "ui_review": false,
+  "mutation_testing": false
+}
