@@ -10,6 +10,50 @@ github_raw_url() {
   printf 'https://raw.githubusercontent.com/%s/%s' "$OPCODE_POD_REPO" "$OPCODE_POD_VERSION"
 }
 
+_profile_registry_path() {
+  local data_dir="${XDG_DATA_HOME:-$HOME/.local/share}"
+  printf '%s/opencode-pod/profiles.json' "$data_dir"
+}
+
+_load_registry() {
+  local path
+  path="$(_profile_registry_path)"
+  if [[ ! -f "$path" ]]; then
+    printf '{"format_version":1,"profiles":[]}'
+    return
+  fi
+  cat "$path"
+}
+
+_save_registry() {
+  local data="$1"
+  local path
+  path="$(_profile_registry_path)"
+  mkdir -p "$(dirname "$path")"
+  printf '%s\n' "$data" > "$path"
+}
+
+_fetch_index() {
+  local url
+  url="$(github_raw_url)/profiles/index.json"
+  curl -sS --fail "$url" 2>/dev/null
+}
+
+_profile_by_name() {
+  local name="$1"
+  local index_json="$2"
+  printf '%s\n' "$index_json" | python3 -c '
+import sys, json
+data = json.load(sys.stdin)
+name = sys.argv[1]
+for p in data.get("profiles", []):
+    if p.get("name") == name:
+        print(json.dumps(p))
+        sys.exit(0)
+sys.exit(1)
+' "$name" 2>/dev/null || true
+}
+
 cmd_profile_list() {
   local url
   url="$(github_raw_url)/profiles/index.json"

@@ -268,3 +268,40 @@ teardown() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"Failed to download"* ]]
 }
+
+# --- Helper tests ---
+
+@test "_profile_registry_path returns XDG path" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  export XDG_DATA_HOME="/custom/data"
+  run _profile_registry_path
+  [ "$status" -eq 0 ]
+  [ "$output" = "/custom/data/opencode-pod/profiles.json" ]
+}
+
+@test "_profile_registry_path falls back to HOME" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  unset XDG_DATA_HOME
+  HOME="/home/testuser"
+  run _profile_registry_path
+  [ "$status" -eq 0 ]
+  [ "$output" = "/home/testuser/.local/share/opencode-pod/profiles.json" ]
+}
+
+@test "_load_registry returns empty JSON when file missing" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  export XDG_DATA_HOME="$TESTDIR"
+  run _load_registry
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"format_version"* ]]
+  [[ "$output" == *'"profiles":[]'* ]]
+}
+
+@test "_save_registry writes valid JSON" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  export XDG_DATA_HOME="$TESTDIR"
+  local test_json='{"format_version":1,"profiles":[{"name":"test","version":"1.0"}]}'
+  run _save_registry "$test_json"
+  [ "$status" -eq 0 ]
+  [[ "$(cat "$TESTDIR/opencode-pod/profiles.json")" == "$test_json" ]]
+}
