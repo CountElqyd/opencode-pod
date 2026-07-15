@@ -1,5 +1,20 @@
 #!/usr/bin/env bats
 
+setup_file() {
+  TESTDIR="$(mktemp -d)"
+  export BATS_TEST_DIRNAME_TARBALL="$TESTDIR"
+  mkdir -p "$TESTDIR/src/config"
+  cp "$BATS_TEST_DIRNAME/../profiles/swarm/src/config/opencode-swarm.json" "$TESTDIR/src/config/opencode-swarm.json"
+  cp "$BATS_TEST_DIRNAME/../profiles/swarm/VERSION" "$TESTDIR/VERSION"
+  tar czf "$TESTDIR/swarm.tar.gz" \
+    -C "$TESTDIR/src" config/ \
+    -C "$TESTDIR" VERSION
+}
+
+teardown_file() {
+  [[ -n "${BATS_TEST_DIRNAME_TARBALL:-}" ]] && rm -rf "$BATS_TEST_DIRNAME_TARBALL"
+}
+
 setup() {
   TEST_HOME="$(mktemp -d)"
   export HOME="$TEST_HOME"
@@ -12,10 +27,28 @@ teardown() {
 
 # --- build.sh ---
 
-@test "build.sh is a no-op stub" {
-  run bash "$BATS_TEST_DIRNAME/../profiles/swarm/build.sh"
+@test "build.sh creates a valid gzip tarball" {
+  local testdir
+  testdir="$(mktemp -d)"
+  cp -r "$BATS_TEST_DIRNAME/../profiles/swarm" "$testdir/swarm"
+  mkdir -p "$testdir/swarm/src/config"
+  cp "$BATS_TEST_DIRNAME/../profiles/swarm/src/config/opencode-swarm.json" "$testdir/swarm/src/config/opencode-swarm.json"
+  run bash "$testdir/swarm/build.sh"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"No tarball"* ]]
+  [ -f "$testdir/swarm/swarm.tar.gz" ]
+  file_output=$(file "$testdir/swarm/swarm.tar.gz")
+  echo "$file_output" | grep -q "gzip compressed data"
+  rm -rf "$testdir"
+}
+
+@test "build.sh fails when src/ is missing" {
+  local testdir
+  testdir="$(mktemp -d)"
+  cp -r "$BATS_TEST_DIRNAME/../profiles/swarm" "$testdir/swarm"
+  rm -rf "$testdir/swarm/src"
+  run bash "$testdir/swarm/build.sh"
+  [ "$status" -ne 0 ]
+  rm -rf "$testdir"
 }
 
 # --- profile.json ---
@@ -74,7 +107,7 @@ else:
 
 # --- setup.sh environment validation ---
 
-@test "setup.sh fails when VERSION file is missing" {
+@test "setup.sh fails when tarball is missing" {
   local profiledir
   profiledir="$(mktemp -d)"
   cp "$BATS_TEST_DIRNAME/../profiles/swarm/setup.sh" "$profiledir/setup.sh"
@@ -82,26 +115,30 @@ else:
 
   run bash "$profiledir/setup.sh"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"VERSION file not found"* ]]
+  [[ "$output" == *"swarm.tar.gz not found"* ]]
   rm -rf "$profiledir"
 }
 
+# --- setup.sh idempotency ---
+
 @test "setup.sh idempotency guard skips when already installed" {
   echo "0.1.0" > "$HOME/.swarm-version"
+  echo "original" > "$HOME/.config/opencode/opencode-swarm.json"
 
   local profiledir
   profiledir="$(mktemp -d)"
+  cp "$BATS_TEST_DIRNAME_TARBALL/swarm.tar.gz" "$profiledir/swarm.tar.gz"
   cp "$BATS_TEST_DIRNAME/../profiles/swarm/setup.sh" "$profiledir/setup.sh"
-  cp "$BATS_TEST_DIRNAME/../profiles/swarm/VERSION" "$profiledir/VERSION"
   chmod +x "$profiledir/setup.sh"
 
   run bash "$profiledir/setup.sh"
   [ "$status" -eq 0 ]
   [[ "$output" == *"already installed"* ]]
+  [ "$(cat "$HOME/.config/opencode/opencode-swarm.json")" = "original" ]
   rm -rf "$profiledir"
 }
 
-# --- setup.sh with mocked npm ---
+# --- setup.sh npm validation ---
 
 @test "setup.sh fails when npm is not available" {
   command() {
@@ -114,8 +151,8 @@ else:
 
   local profiledir
   profiledir="$(mktemp -d)"
+  cp "$BATS_TEST_DIRNAME_TARBALL/swarm.tar.gz" "$profiledir/swarm.tar.gz"
   cp "$BATS_TEST_DIRNAME/../profiles/swarm/setup.sh" "$profiledir/setup.sh"
-  cp "$BATS_TEST_DIRNAME/../profiles/swarm/VERSION" "$profiledir/VERSION"
   chmod +x "$profiledir/setup.sh"
 
   run bash "$profiledir/setup.sh"
@@ -124,13 +161,13 @@ else:
   rm -rf "$profiledir"
 }
 
-@test "setup.sh installs and copies config" {
+# --- setup.sh with mocked npm ---
+
+@test "setup.sh extracts tarball and copies config" {
   local profiledir
   profiledir="$(mktemp -d)"
+  cp "$BATS_TEST_DIRNAME_TARBALL/swarm.tar.gz" "$profiledir/swarm.tar.gz"
   cp "$BATS_TEST_DIRNAME/../profiles/swarm/setup.sh" "$profiledir/setup.sh"
-  cp "$BATS_TEST_DIRNAME/../profiles/swarm/VERSION" "$profiledir/VERSION"
-  mkdir -p "$profiledir/src/config"
-  cp "$BATS_TEST_DIRNAME/../profiles/swarm/src/config/opencode-swarm.json" "$profiledir/src/config/opencode-swarm.json"
   chmod +x "$profiledir/setup.sh"
 
   mockdir="$(mktemp -d)"
@@ -155,10 +192,8 @@ SCRIPT
 @test "setup.sh copies config with correct content" {
   local profiledir
   profiledir="$(mktemp -d)"
+  cp "$BATS_TEST_DIRNAME_TARBALL/swarm.tar.gz" "$profiledir/swarm.tar.gz"
   cp "$BATS_TEST_DIRNAME/../profiles/swarm/setup.sh" "$profiledir/setup.sh"
-  cp "$BATS_TEST_DIRNAME/../profiles/swarm/VERSION" "$profiledir/VERSION"
-  mkdir -p "$profiledir/src/config"
-  cp "$BATS_TEST_DIRNAME/../profiles/swarm/src/config/opencode-swarm.json" "$profiledir/src/config/opencode-swarm.json"
   chmod +x "$profiledir/setup.sh"
 
   mockdir="$(mktemp -d)"

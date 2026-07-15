@@ -899,3 +899,41 @@ EOF
   cmd="$(cat "$TESTDIR/unshare_args")"
   [[ "$cmd" == *"chown -R 0:0"* ]]
 }
+
+@test "bootstrap installs ncurses-terminfo-base for terminal support" {
+  mkdir -p "$TESTDIR/project"
+  cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
+[container]
+image = "wolfi-base"
+packages = ["git"]
+EOF
+
+  source lib/toml.sh
+  source lib/podman.sh
+  resolve_project "$TESTDIR/project"
+
+  local apk_add_args=""
+  podman() {
+    case "$1" in
+      start) return 0 ;;
+      exec)
+        if [[ "$2" == "$CONTAINER_NAME" && "$3" == "apk" && "$4" == "add" ]]; then
+          printf '%s\n' "$*" > "$TESTDIR/apk_add_args"
+          return 0
+        fi
+        if [[ "$2" == "$CONTAINER_NAME" && "$3" == "apk" && "$4" == "info" ]]; then
+          return 0
+        fi
+        return 0
+        ;;
+      cp) return 0 ;;
+    esac
+    return 0
+  }
+  export -f podman
+
+  run run_bootstrap
+  [ "$status" -eq 0 ]
+
+  [[ "$(cat "$TESTDIR/apk_add_args")" == *"ncurses-terminfo-base"* ]]
+}
