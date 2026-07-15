@@ -197,6 +197,20 @@ profiles/             # Reusable environment profiles
 
 ---
 
+## Acknowledgments
+
+This project builds on the work of several open-source projects and communities:
+
+- **[opencode-swarm](https://github.com/CountElqyd/opencode-swarm)** — Multi-agent swarm profiles for OpenCode
+- **[gstack](https://github.com/anomalyco/gstack)** — AI agent tooling and browser automation
+- **[GSD (Goal-Driven Development)](https://github.com/obra/gsd-core)** — Structured AI development methodology
+- **[fabric](https://github.com/danielmiessler/fabric)** — AI-powered analysis patterns by Daniel Miessler
+- **[superpowers](https://github.com/obra/superpowers)** — Agent skill ecosystem by Obra
+- **[Podman](https://podman.io)** — Rootless container engine
+- **[OpenCode](https://opencode.ai)** — Autonomous coding agent
+
+---
+
 ## License
 
 MIT

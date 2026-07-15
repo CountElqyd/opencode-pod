@@ -192,7 +192,7 @@ run_bootstrap() {
   local completed_all=true
 
   if ! is_bootstrap_step_done "$progress" "packages_installed"; then
-    local packages="${CONFIG_CONTAINER_PACKAGES:-git openssh curl} zsh bash vim libstdc++"
+    local packages="${CONFIG_CONTAINER_PACKAGES:-git openssh curl} zsh bash vim libstdc++ ncurses-terminfo-base"
     printf '%s\n' "Installing packages: $packages"
     local apk_stderr
     apk_stderr="$(mktemp)"
