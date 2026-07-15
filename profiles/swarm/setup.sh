@@ -43,13 +43,13 @@ if ! command -v npm &>/dev/null; then
 fi
 
 echo "  Installing opencode-swarm via npm..."
-if ! npm install -g opencode-swarm 2>&1; then
+if ! npm install -g opencode-swarm; then
   echo "Error: npm install failed" >&2
   exit 1
 fi
 
 echo "  Running opencode-swarm installer..."
-if ! opencode-swarm install 2>&1; then
+if ! opencode-swarm install; then
   echo "Error: opencode-swarm install failed" >&2
   exit 1
 fi
