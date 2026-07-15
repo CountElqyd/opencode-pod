@@ -5,6 +5,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VERSION_FILE="$SCRIPT_DIR/VERSION"
 
+cleanup() {
+  local rc=$?
+  if [ $rc -ne 0 ]; then
+    echo "Swarm profile installation failed. Re-run setup.sh to retry." >&2
+  fi
+}
+trap cleanup EXIT
+
 # ---- Environment validation ----
 if [ ! -f "$VERSION_FILE" ]; then
   echo "Error: VERSION file not found at $VERSION_FILE" >&2
@@ -35,16 +43,16 @@ if ! command -v npm &>/dev/null; then
 fi
 
 echo "  Installing opencode-swarm via npm..."
-npm install -g opencode-swarm &>/dev/null || {
+if ! npm install -g opencode-swarm 2>&1; then
   echo "Error: npm install failed" >&2
   exit 1
-}
+fi
 
 echo "  Running opencode-swarm installer..."
-opencode-swarm install &>/dev/null || {
+if ! opencode-swarm install 2>&1; then
   echo "Error: opencode-swarm install failed" >&2
   exit 1
-}
+fi
 
 # ---- Copy pre-configured config ----
 CONFIG_SRC="$SCRIPT_DIR/src/config/opencode-swarm.json"
