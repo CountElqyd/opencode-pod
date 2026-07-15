@@ -99,31 +99,58 @@ teardown() {
 
 @test "cmd_profile_info unknown profile" {
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
-  curl() { return 1; }
-  export -f curl
+  _fetch_index() { return 1; }
+  export -f _fetch_index
   run cmd_profile_info "unknown"
   [ "$status" -eq 1 ]
   [[ "$output" == *"not found"* ]]
 }
 
-@test "cmd_profile_info displays metadata" {
+@test "cmd_profile_info displays metadata from index" {
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
-  curl() {
-    printf '{"name":"ralph","version":"0.2.0","description":"Test","author":"Ralph","components":{"skills":5,"agents":3,"commands":2,"fabric_mcp":true,"gsd_core":"1.0.0"},"requires":["nodejs"],"network":"host"}'
-    return 0
+  _fetch_index() {
+    printf '{"format_version":2,"profiles":[{"name":"ralph","version":"0.2.0","description":"Test profile","path":"profiles/ralph/","author":"Ralph","components":{"skills":5,"agents":3,"commands":2,"fabric_mcp":true,"gsd_core":"1.0.0"},"requires":["nodejs"],"network":"host"}]}'
   }
+  _load_registry() { printf '{"format_version":1,"profiles":[{"name":"ralph","version":"0.2.0"}]}'; }
   python3() { command python3 "$@"; }
-  export -f curl python3
-
+  export -f _fetch_index _load_registry python3
   run cmd_profile_info ralph
   [ "$status" -eq 0 ]
   [[ "$output" == *"ralph"* ]]
   [[ "$output" == *"0.2.0"* ]]
-  [[ "$output" == *"Test"* ]]
+  [[ "$output" == *"Test profile"* ]]
   [[ "$output" == *"Ralph"* ]]
   [[ "$output" == *"5"* ]]
   [[ "$output" == *"3"* ]]
   [[ "$output" == *"host"* ]]
+  [[ "$output" == *"Installed"* ]]
+}
+
+@test "cmd_profile_info shows version diff when installed version differs" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  _fetch_index() {
+    printf '{"format_version":2,"profiles":[{"name":"ralph","version":"0.3.0","description":"Newer","path":"profiles/ralph/","author":"Ralph","components":{},"network":""}]}'
+  }
+  _load_registry() { printf '{"format_version":1,"profiles":[{"name":"ralph","version":"0.2.0"}]}'; }
+  python3() { command python3 "$@"; }
+  export -f _fetch_index _load_registry python3
+  run cmd_profile_info ralph
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"0.3.0"* ]]
+  [[ "$output" == *"0.2.0"* ]]
+}
+
+@test "cmd_profile_info shows remote-only when not installed" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  _fetch_index() {
+    printf '{"format_version":2,"profiles":[{"name":"ralph","version":"0.2.0","description":"Test","path":"profiles/ralph/","author":"Ralph","components":{},"network":""}]}'
+  }
+  _load_registry() { printf '{"format_version":1,"profiles":[]}'; }
+  python3() { command python3 "$@"; }
+  export -f _fetch_index _load_registry python3
+  run cmd_profile_info ralph
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"Installed"* ]]
 }
 
 # --- cmd_profile_install ---

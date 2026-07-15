@@ -101,21 +101,33 @@ cmd_profile_info() {
     exit 1
   fi
 
-  local url
-  url="$(github_raw_url)/profiles/${name}/profile.json"
-
-  local json
-  json=$(curl -sS --fail "$url" 2>/dev/null) || {
+  local index
+  index=$(_fetch_index) || {
     printf "Profile '%s' not found. Run 'opencode-pod profile list'.\n" "$name" >&2
     exit 1
   }
 
-  printf '%s\n' "$json" | python3 -c '
+  local profile_json
+  profile_json=$(_profile_by_name "$name" "$index")
+  if [[ -z "$profile_json" ]]; then
+    printf "Profile '%s' not found. Run 'opencode-pod profile list'.\n" "$name" >&2
+    exit 1
+  fi
+
+  local registry installed_ver=""
+  registry=$(_load_registry)
+  installed_ver=$(printf '%s\n' "$registry" | python3 -c "
 import sys, json
-try:
-    data = json.load(sys.stdin)
-except json.JSONDecodeError:
-    sys.exit(2)
+data = json.load(sys.stdin)
+name = '$name'
+for p in data.get('profiles', []):
+    if p.get('name') == name:
+        print(p.get('version', ''))
+" 2>/dev/null || printf '')
+
+  printf '%s\n' "$profile_json" | python3 -c '
+import sys, json
+data = json.load(sys.stdin)
 name = data.get("name", "")
 ver = data.get("version", "")
 desc = data.get("description", "")
@@ -123,11 +135,17 @@ author = data.get("author", "")
 components = data.get("components", {})
 requires = data.get("requires", [])
 network = data.get("network", "")
+installed = "'"$installed_ver"'"
+
 print(f"Profile:            {name}")
 print(f"Version:            {ver}")
-print(f"Description:        {desc}")
+if installed and installed != ver:
+    print(f"  (installed: {installed})")
+elif installed:
+    print(f"Installed:          {installed}")
 if author:
     print(f"Author:             {author}")
+print(f"Description:        {desc}")
 print("Components:")
 comp_labels = {
     "skills": "Skills:",
@@ -147,11 +165,8 @@ if requires:
     print(f"Requires:           {_comma.join(requires)}")
 if network:
     print(f"Network:            {network}")
-' || {
-    local rc=$?
-    if [[ $rc -eq 2 ]]; then
-      printf 'Error: Invalid profile metadata format.\n' >&2
-    fi
+' 2>/dev/null || {
+    printf 'Error: Invalid profile metadata format.\n' >&2
     exit 1
   }
 }
