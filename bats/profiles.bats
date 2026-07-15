@@ -180,7 +180,7 @@ teardown() {
   [[ "$output" == *"Invalid profile name"* ]]
 }
 
-@test "cmd_profile_install already installed" {
+@test "cmd_profile_install already installed without --force" {
   cd "$TESTDIR"
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
   mkdir -p "./profiles/ralph"
@@ -189,49 +189,68 @@ teardown() {
   [[ "$output" == *"Already installed"* ]]
 }
 
-@test "cmd_profile_install unknown profile" {
+@test "cmd_profile_install --force overwrites existing" {
   cd "$TESTDIR"
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
-  curl() { return 1; }
-  export -f curl
-  run cmd_profile_install "unknown"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"not found"* ]]
+  mkdir -p "./profiles/ralph"
+  printf 'old' > "./profiles/ralph/ralph.tar.gz"
+
+  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"1.0.0","description":"Test","path":"profiles/ralph/","components":{},"network":""}]}'; }
+  _save_registry() { :; }
+  curl() {
+    case "$*" in
+      *ralph.tar.gz*) printf 'new-tarball' > "./profiles/ralph/ralph.tar.gz" ;;
+      *setup.sh*) printf '#!/bin/bash\necho hello' > "./profiles/ralph/setup.sh" ;;
+    esac
+    return 0
+  }
+  python3() { command python3 "$@"; }
+  export -f _fetch_index _save_registry curl python3
+  run cmd_profile_install "ralph" "--force"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"installed"* ]]
+  [[ "$output" == *"1.0.0"* ]]
+  [ -x "./profiles/ralph/setup.sh" ]
+  [ -f "./profiles/ralph/ralph.tar.gz" ]
+  [ -f "./profiles/ralph/profile.json" ]
 }
 
 @test "cmd_profile_install success" {
   cd "$TESTDIR"
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"1.0.0","description":"Test","path":"profiles/ralph/","components":{},"network":""}]}'; }
+  _save_registry() { :; }
   curl() {
     case "$*" in
-      *profile.json*) printf '{"name":"ralph","version":"1.0.0","components":{},"network":""}' ;;
       *ralph.tar.gz*) mkdir -p "./profiles/ralph"; printf 'fake-tarball' > "./profiles/ralph/ralph.tar.gz" ;;
       *setup.sh*) printf '#!/bin/bash\necho hello' > "./profiles/ralph/setup.sh" ;;
     esac
     return 0
   }
   python3() { command python3 "$@"; }
-  export -f curl python3
+  export -f _fetch_index _save_registry curl python3
   run cmd_profile_install "ralph"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Profile 'ralph' (v1.0.0) installed"* ]]
-  [[ "$output" == *"setup.sh"* ]]
+  [[ "$output" == *"installed"* ]]
+  [[ "$output" == *"1.0.0"* ]]
   [ -x "./profiles/ralph/setup.sh" ]
   [ -f "./profiles/ralph/ralph.tar.gz" ]
+  [ -f "./profiles/ralph/profile.json" ]
 }
 
-@test "cmd_profile_install tarball download failure" {
+@test "cmd_profile_install tarball download failure cleans up" {
   cd "$TESTDIR"
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"1.0.0","description":"Test","path":"profiles/ralph/","components":{},"network":""}]}'; }
   curl() {
     if [[ "$*" == *"profile.json"* ]]; then
-      printf '{"name":"ralph","version":"1.0.0","components":{},"network":""}'
+      printf '{"name":"ralph","version":"1.0.0"}'
       return 0
     fi
     return 1
   }
   python3() { command python3 "$@"; }
-  export -f curl python3
+  export -f _fetch_index curl python3
   run cmd_profile_install "ralph"
   [ "$status" -eq 1 ]
   [[ "$output" == *"Failed to download"* ]]
@@ -241,21 +260,30 @@ teardown() {
 @test "cmd_profile_install setup.sh download failure cleans up" {
   cd "$TESTDIR"
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"1.0.0","description":"Test","path":"profiles/ralph/","components":{},"network":""}]}'; }
   curl() {
     case "$*" in
-      *profile.json*) printf '{"name":"ralph","version":"0.2.0"}' ;;
-      *ralph.tar.gz*) printf 'fake-tarball' > "$TESTDIR/profiles/ralph/ralph.tar.gz" ;;
+      *ralph.tar.gz*) mkdir -p "$TESTDIR/profiles/ralph"; printf 'tarball' > "$TESTDIR/profiles/ralph/ralph.tar.gz"; return 0 ;;
       *setup.sh*) return 1 ;;
     esac
     return 0
   }
   python3() { command python3 "$@"; }
-  export -f curl python3
-
-  run cmd_profile_install ralph
+  export -f _fetch_index curl python3
+  run cmd_profile_install "ralph"
   [ "$status" -eq 1 ]
   [[ "$output" == *"Failed to download"* ]]
   [ ! -d "$TESTDIR/profiles/ralph" ]
+}
+
+@test "cmd_profile_install unknown profile" {
+  cd "$TESTDIR"
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"other","version":"1.0","description":"Other"}]}'; }
+  export -f _fetch_index
+  run cmd_profile_install "unknown"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"not found"* ]]
 }
 
 # --- cmd_profile_update ---

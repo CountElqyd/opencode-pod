@@ -176,9 +176,17 @@ if network:
 }
 
 cmd_profile_install() {
-  local name="${1:-}"
+  local force=false
+  local name=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --force) force=true; shift ;;
+      *) name="$1"; shift ;;
+    esac
+  done
+
   if [[ -z "$name" ]]; then
-    printf 'Usage: opencode-pod profile install <name>\n' >&2
+    printf 'Usage: opencode-pod profile install [--force] <name>\n' >&2
     exit 1
   fi
   if [[ ! "$name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
@@ -186,36 +194,32 @@ cmd_profile_install() {
     exit 1
   fi
 
-  if [[ -d "./profiles/${name}" ]]; then
-    printf "Already installed. Run 'opencode-pod profile update %s' to re-download.\n" "$name" >&2
+  if [[ -d "./profiles/${name}" ]] && ! $force; then
+    printf "Already installed. Run 'opencode-pod profile update %s' or use --force.\n" "$name" >&2
     exit 1
   fi
 
-  local url json version network_mode
-  url="$(github_raw_url)/profiles/${name}/profile.json"
-  json=$(curl -sS --fail "$url" 2>/dev/null) || {
+  local index
+  index=$(_fetch_index) || {
+    printf 'Error: Unable to fetch profile index from GitHub.\n' >&2
+    exit 1
+  }
+
+  local profile_json
+  profile_json=$(_profile_by_name "$name" "$index")
+  if [[ -z "$profile_json" ]]; then
     printf "Profile '%s' not found. Run 'opencode-pod profile list'.\n" "$name" >&2
     exit 1
-  }
+  fi
 
-  version=$(printf '%s\n' "$json" | python3 -c '
-import sys, json
-data = json.load(sys.stdin)
-print(data.get("version", "?"))
-' 2>/dev/null) || {
-    printf 'Error: Invalid profile metadata format.\n' >&2
-    exit 1
-  }
-
-  network_mode=$(printf '%s\n' "$json" | python3 -c '
-import sys, json
-data = json.load(sys.stdin)
-print(data.get("network", ""))
-' 2>/dev/null || printf '')
+  local version network_mode description
+  version=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("version","?"))' 2>/dev/null)
+  network_mode=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("network",""))' 2>/dev/null || printf '')
+  description=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("description",""))' 2>/dev/null || printf '')
 
   mkdir -p "./profiles/${name}"
 
-  local tarball_url
+  local tarball_url setup_url
   tarball_url="$(github_raw_url)/profiles/${name}/${name}.tar.gz"
   if ! curl -sS --fail -o "./profiles/${name}/${name}.tar.gz" "$tarball_url" 2>/dev/null; then
     rm -rf "./profiles/${name}"
@@ -223,7 +227,6 @@ print(data.get("network", ""))
     exit 1
   fi
 
-  local setup_url
   setup_url="$(github_raw_url)/profiles/${name}/setup.sh"
   if ! curl -sS --fail -o "./profiles/${name}/setup.sh" "$setup_url" 2>/dev/null; then
     rm -rf "./profiles/${name}"
@@ -232,6 +235,34 @@ print(data.get("network", ""))
   fi
 
   chmod +x "./profiles/${name}/setup.sh"
+
+  # Save profile.json locally
+  printf '%s\n' "$profile_json" > "./profiles/${name}/profile.json"
+
+  # Update local registry
+  local registry
+  registry=$(_load_registry)
+  local updated_registry
+  updated_registry=$(printf '%s\n' "$registry" | python3 -c '
+import sys, json
+from datetime import datetime
+data = json.load(sys.stdin)
+name = "'"$name"'"
+version = "'"$version"'"
+desc = "'"$description"'"
+path = "profiles/'"$name"'/"
+new_entry = {"name": name, "version": version, "description": desc, "path": path, "installed_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")}
+profiles = data.get("profiles", [])
+for i, p in enumerate(profiles):
+    if p.get("name") == name:
+        profiles[i] = new_entry
+        break
+else:
+    profiles.append(new_entry)
+data["profiles"] = profiles
+print(json.dumps(data, indent=2))
+' 2>/dev/null)
+  _save_registry "$updated_registry"
 
   if [[ "$network_mode" == "host" && -t 0 ]]; then
     printf 'Profile requires host networking. Update opencode-pod.toml? [y/N]: '
