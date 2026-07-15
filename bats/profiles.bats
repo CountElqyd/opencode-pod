@@ -99,11 +99,22 @@ teardown() {
 
 @test "cmd_profile_info unknown profile" {
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
-  _fetch_index() { return 1; }
+  _fetch_index() {
+    printf '{"format_version":2,"profiles":[{"name":"ralph","version":"1.0","description":"Existing"}]}'
+  }
   export -f _fetch_index
   run cmd_profile_info "unknown"
   [ "$status" -eq 1 ]
   [[ "$output" == *"not found"* ]]
+}
+
+@test "cmd_profile_info handles network failure" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  _fetch_index() { return 1; }
+  export -f _fetch_index
+  run cmd_profile_info "ralph"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Unable to fetch profile index"* ]]
 }
 
 @test "cmd_profile_info displays metadata from index" {

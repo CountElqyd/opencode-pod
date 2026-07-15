@@ -103,13 +103,17 @@ cmd_profile_info() {
 
   local index
   index=$(_fetch_index) || {
-    printf "Profile '%s' not found. Run 'opencode-pod profile list'.\n" "$name" >&2
+    printf 'Error: Unable to fetch profile index from GitHub.\n' >&2
     exit 1
   }
 
   local profile_json
   profile_json=$(_profile_by_name "$name" "$index")
   if [[ -z "$profile_json" ]]; then
+    printf '%s\n' "$index" | python3 -c 'import sys,json; json.load(sys.stdin)' 2>/dev/null || {
+      printf 'Error: Invalid profile index format.\n' >&2
+      exit 1
+    }
     printf "Profile '%s' not found. Run 'opencode-pod profile list'.\n" "$name" >&2
     exit 1
   fi
