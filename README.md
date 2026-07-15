@@ -6,306 +6,158 @@
 [![Shell](https://img.shields.io/badge/shell-bash-4EAA25?logo=gnubash)](https://www.gnu.org/software/bash/)
 [![Podman](https://img.shields.io/badge/podman-%3E%3D4.3-892CA0?logo=podman)](https://podman.io)
 
-**Secure, disposable dev containers for the [OpenCode](https://opencode.ai) autonomous coding agent.**
-
----
-
-## Table of Contents
-
-- [What is opencode-pod?](#what-is-opencode-pod)
-- [Why this exists for OpenCode](#why-this-exists-for-opencode)
-- [Quick Start](#quick-start)
-- [How It Works](#how-it-works)
-- [All Commands](#all-commands)
-- [Auto-Detection Profiles](#auto-detection-profiles)
-- [Security](#security)
-- [Configuration](#configuration)
-- [Error Recovery](#error-recovery)
-- [Requirements](#requirements)
-- [Development](#development)
-- [License](#license)
-
----
-
-## What is opencode-pod?
-
-A single Bash script that creates **per-project, rootless Podman containers** sandboxed from your host. Purpose-built for [OpenCode](https://opencode.ai) — the AI coding agent that runs on your machine and has access to your filesystem, SSH keys, API tokens, and personal data.
-
-Instead of letting the agent roam free on your host, `opencode-pod` gives it a locked-down container with:
-
-- Zero host filesystem visibility (only `$PWD` mounted)
-- A fresh SSH key pair (never touches `~/.ssh`)
-- Isolated API tokens (agent can use them, cannot read them)
-- Auto-detected toolchains (Node, Python, Rust, Go)
-- One-command startup and teardown
-
----
-
-## Why this exists for OpenCode
-
-OpenCode is an autonomous agent — it reads, edits, runs shell commands, and manages files. On your host, that means it has access to everything you do. `opencode-pod` solves this by running OpenCode **inside** a container where:
-
-- The agent's `read`/`edit` permissions are scoped to `/workspace` (your project)
-- `auth.json` lives on an isolated volume — the agent cannot read or edit it
-- SSH keys are container-scoped — host keys are invisible
-- `curl` and `wget` can be blocked at the OpenCode permission level
-- Port forwarding binds to `127.0.0.1` — no external network access
-
-It's the difference between "OpenCode on your laptop" and "OpenCode in a locked room with only what it needs."
-
----
-
-## Quick Start
+**Secure, disposable dev containers for the [OpenCode](https://opencode.ai) autonomous coding agent. Rootless Podman, one command, zero host access.**
 
 ```sh
 # One-time install
 curl -fsSL https://raw.githubusercontent.com/CountElqyd/opencode-pod/main/install.sh | sh
 
-# Enter any project
-cd my-project
-opencode-pod start
+# Start coding in any project
+cd my-project && opencode-pod start
 ```
 
-First run auto-detects your project type, pulls a Wolfi image, installs packages,
-sets up Node.js (via nvm), generates SSH keys, and installs OpenCode — all in ~60s.
+First run auto-detects your project type (Node, Python, Rust, Go), pulls a Wolfi base image, provisions the toolchain, generates SSH keys, and installs OpenCode — ~60s. After that, `start` is instant.
 
-After setup, `start` is instant. Work inside the container, then `exit` — the
-container keeps running. Re-enter anytime with `opencode-pod start`.
+**Why a container?** OpenCode reads, edits, and runs commands on your machine. Without a container, the agent has access to your SSH keys, API tokens, home directory, and every file on disk. `opencode-pod` locks the agent into a rootless Podman container where:
+
+- Only `$PWD` is visible — no host filesystem access
+- SSH keys are per-container, never touching `~/.ssh`
+- API tokens live on an isolated volume the agent can use but not read
+- Network can be locked to `none` mode for offline workloads
+
+---
+
+## Usage
+
+Each project gets a rootless Podman container with a persistent home volume. Your project directory is mounted at `/workspace`. The container survives shell exit — `start` reattaches instantly.
+
+| Action | Command | Notes |
+|--------|---------|-------|
+| Create a config | `opencode-pod init` | Generates `opencode-pod.toml`, offline/instant |
+| Provision the container | `opencode-pod setup` | One-time, ~60s. `--force-recreate` to rebuild |
+| Enter the sandbox | `opencode-pod start` | Instant after setup. Runs setup first if needed |
+| Suspend (preserve tools) | `opencode-pod stop` | Container pauses, home volume intact |
+| Resume a stopped project | `opencode-pod start` | Same command — idempotent |
+| List running containers | `opencode-pod status` | Shows state, project path, image |
+| Health check + diagnostics | `opencode-pod doctor` | Checks Podman, image, SELinux, disk. `--fix` repairs |
+| Refresh tools | `opencode-pod upgrade` | Checks image freshness (30-day). `--pull` to force |
+| Manage environment profiles | `opencode-pod profile list\|info\|install\|update <name>` | Fetch/share reusable configs |
+| Wipe everything | `opencode-pod destroy` | Removes container + home volume |
+
+### Container Lifecycle
+
+```
+init ─→ setup ─→ start ─→ [work] ─→ stop
+                         ↑            │
+                         └──── start ──┘
+                                    → destroy (wipe all)
+```
+
+Setup is checkpointed — if interrupted, re-running resumes from the last completed step.
+
+---
+
+## Profiles
+
+When no config exists, `opencode-pod start` auto-detects your project type and installs the right toolchain:
+
+| Detected file | Profile | Packages |
+|---------------|---------|----------|
+| `package.json` | Node.js | `nodejs`, `npm`, `git`, `openssh` |
+| `pyproject.toml` / `requirements.txt` | Python | `python3`, `uv`, `git`, `openssh` |
+| `Cargo.toml` | Rust | `rust`, `cargo`, `git`, `openssh` |
+| `go.mod` | Go | `go`, `git`, `openssh` |
+| *(none)* | Default | `git`, `openssh`, `curl` |
+
+All profiles include `zsh`, `bash`, `vim`, and `libstdc++`.
+
+### Reusable Environment Profiles
+
+Share and install pre-packaged OpenCode environments (skills, agents, config, tooling) from the project's GitHub repo:
 
 ```sh
-# When you're done
-opencode-pod stop       # suspend, preserve tools
-opencode-pod destroy    # wipe container + volume
+opencode-pod profile list                 # list available profiles
+opencode-pod profile info ralph           # show details
+opencode-pod profile install ralph        # download to ./profiles/ralph/
+opencode-pod profile update ralph         # re-download latest
 ```
 
----
-
-## How It Works
-
-### Lifecycle
-
-```
-┌──────┐    ┌───────┐    ┌───────┐    ┌─────────┐    ┌─────────┐
-│ init │───▶│ setup │───▶│ start │───▶│  work   │───▶│  stop   │
-└──────┘    └───────┘    └───────┘    │(exit)   │    └─────────┘
-                                      └─────────┘         │
-                                           │              │
-                                           ▼              ▼
-                                     ┌─────────┐    ┌───────────┐
-                                     │  start  │    │  destroy  │
-                                     │(resume) │    │(wipe all) │
-                                     └─────────┘    └───────────┘
-```
-
-### Container Naming
-
-Containers are named `opencode-pod-<dirname>-<6char-path-hash>`. The 6-char hash is
-derived from SHA256 of the absolute project path, preventing collisions between
-directories with the same name in different locations.
-
-### Bootstrap Checkpoints
-
-Setup is checkpointed — if it fails mid-way (network issue, power loss), re-running
-resumes from the last completed step:
-
-1. **fix_home_ownership** — `podman unshare chown` the home volume
-2. **packages_installed** — `apk add` with per-package verification via `apk info -e`
-3. **user_created** — creates `dev` user (UID 1000) with zsh
-4. **ssh_key_generated** — fresh ed25519 keypair inside the container
-5. **nvm_installed** — nvm v0.40.3 + Node.js LTS, `.zshenv` configured
-6. **opencode_config_copied** — `opencode.json` permission rules deployed
-7. **opencode_installed** — `npm install -g opencode-ai`
-
-### Package Verification
-
-The tool does not trust `apk add`'s exit code (which can be non-zero due to
-triggers or post-install warnings). Every package is individually verified with
-`apk info -e <pkg>`.
-
----
-
-## All Commands
-
-| When you want to...              | Run                       | Notes                                         |
-|----------------------------------|---------------------------|-----------------------------------------------|
-| Create a config                  | `opencode-pod init`       | Generates `opencode-pod.toml`, offline/instant |
-| Pull image + provision container | `opencode-pod setup`      | One-time, ~60s. `--force-recreate` to rebuild  |
-| Enter the sandbox                | `opencode-pod start`      | Instant after setup. Runs setup if needed      |
-| Stop and save work for later     | `opencode-pod stop`       | Preserves installed tools                     |
-| Resume a stopped project         | `opencode-pod start`      | Same command — idempotent                      |
-| Check which containers are alive | `opencode-pod status`     | Shows state, project path, image               |
-| Health check your setup          | `opencode-pod doctor`     | Checks Podman, image, SELinux, disk space. `--fix` |
-| Update tools in the container    | `opencode-pod upgrade`    | Checks image freshness (30-day). `--pull` to refresh |
-| List available profiles          | `opencode-pod profile list` | Fetches profile index from GitHub             |
-| Show profile details             | `opencode-pod profile info <name>` | Displays version, components, requirements |
-| Download a profile               | `opencode-pod profile install <name>` | Saves to `./profiles/<name>/` |
-| Re-download a profile            | `opencode-pod profile update <name>` | Re-fetches latest tarball + setup.sh |
-| Destroy everything, start fresh  | `opencode-pod destroy`    | Removes container + home volume               |
-
----
-
-## Auto-Detection Profiles
-
-When no TOML config exists, `opencode-pod start` detects your project type and
-installs the appropriate toolchain:
-
-| Detected file           | Profile   | Packages installed                          |
-|-------------------------|-----------|----------------------------------------------|
-| `package.json`          | Node.js   | `nodejs`, `npm`, `git`, `openssh`            |
-| `pyproject.toml` or `requirements.txt` | Python | `python3`, `uv`, `git`, `openssh`  |
-| `Cargo.toml`            | Rust      | `rust`, `cargo`, `git`, `openssh`            |
-| `go.mod`                | Go        | `go`, `git`, `openssh`                       |
-| *(none detected)*       | Default   | `git`, `openssh`, `curl`                     |
-
-All profiles also include `zsh`, `bash`, `vim`, and `libstdc++` as base packages.
-
-### Profile Management
-
-`opencode-pod` can discover, download, and manage reusable OpenCode environment
-profiles (skills, agents, config, tooling) from the project's GitHub repo:
-
-```sh
-# List available profiles
-opencode-pod profile list
-
-# Show profile details
-opencode-pod profile info ralph
-
-# Download a profile to the current project
-opencode-pod profile install ralph
-
-# Re-download the latest version
-opencode-pod profile update ralph
-```
-
-Profiles are downloaded to `./profiles/<name>/`. Inside the container, run the
-profile's `setup.sh` to install it:
+Inside the container, run the profile's `setup.sh` to install:
 
 ```sh
 bash /workspace/profiles/ralph/setup.sh
 ```
 
-Profiles can be committed to your repo (pinning a version for your team) or
-gitignored (each developer installs independently) — either works.
-
-Some profiles (like `ralph`) recommend host networking for local LLM access.
-When installing such a profile, `opencode-pod` prompts to update
-`opencode-pod.toml` automatically.
-
-### Reusable Environment Profiles
-
-The `profiles/` directory contains pre-packaged OpenCode environments
-(skills, agents, config, tooling) that can be installed inside any
-opencode-pod container with a single command:
-
-```sh
-bash /opencode-pod/profiles/<name>/setup.sh
-```
-
-The [`ralph`](profiles/ralph) profile is the reference — it bundles GSD-Core,
-G-Stack skills, and a fabric-mcp server.
-See [`profiles/README.md`](profiles/README.md) for the convention and how to
-create custom profiles.
+Profiles can be committed to your repo (pinning a version for the team) or gitignored (each developer installs independently). See [`profiles/README.md`](profiles/README.md) for the convention and how to create custom profiles.
 
 ---
 
 ## Security
 
-Six-layer isolation model designed for autonomous agent containment.
+Six-layer isolation designed for autonomous agent containment:
 
-### 1. Rootless Podman
-Container runs as the host user. `--privileged` is never used. User namespace maps
-"container root" to the host user — a compromised container cannot escalate to host root.
+**1. Rootless Podman** — Container runs as the host user. No `--privileged`, no root escalation path.
 
-### 2. Container Hardening
-- `--cap-drop=ALL` — zero capabilities (not even CAP_CHOWN)
-- `--security-opt=no-new-privileges` — no privilege escalation
-- `--userns=keep-id` — keep the host user's UID inside
-- No host PID namespace, no host `/proc`
+**2. Container Hardening** — `--cap-drop=ALL`, `--security-opt=no-new-privileges`, `--userns=keep-id`. Zero capabilities, no privilege escalation.
 
-### 3. Filesystem Boundaries
-- Only `$PWD` bind-mounted at `/workspace` (with `:Z` for SELinux)
-- Container home lives on a named Podman volume — zero host filesystem visibility
-- Extra mounts are explicit and user-approved in config
+**3. Filesystem Boundaries** — Only `$PWD` bind-mounted at `/workspace` (`:Z` for SELinux). Container home on a named Podman volume — zero host filesystem visibility. Extra mounts are explicit, user-approved.
 
-### 4. SSH Isolation
-- Fresh ed25519 keypair generated inside the container on first launch
-- Separate key per container — host `~/.ssh` is invisible
-- Compromised container exposes only ephemeral container keys
+**4. SSH Isolation** — Fresh ed25519 keypair generated inside each container. Host `~/.ssh` is invisible. A compromised container exposes only ephemeral container keys.
 
-### 5. API Token Isolation
-- OpenCode `auth.json` lives on the container's home volume (Podman volume)
-- `opencode.json` permission rules block agent-level read/edit access to the token
-- OpenCode itself can still use the token for LLM API calls
-- Agent cannot `curl`/`wget` the token out (blocked at permission level)
+**5. API Token Isolation** — OpenCode's `auth.json` lives on the container's home volume. The bundled `opencode.json` permission rules deny the agent read/edit access to the token file, SSH keys, AWS creds, `.env`, and `*.pem`/`*.key` files. OpenCode itself can still use the token for LLM calls.
 
-### 6. Network Isolation
-- Full internet via rootless slirp4netns/pasta NAT
-- Container **cannot access host network** directly
-- Port forwarding binds to `127.0.0.1` only (not `0.0.0.0`)
-- Configurable to `none` mode for zero-network isolation
-
-### OpenCode Permission Rules
-
-The bundled `opencode.json` deploys these deny rules inside the container:
-
-| Permission | Blocked paths / commands     |
-|------------|------------------------------|
-| `read`     | `auth.json`, `~/.ssh/*`, `~/.aws/*`, `*.pem`, `*.key`, `.env` |
-| `edit`     | `auth.json`, `~/.ssh/*`, `~/.aws/*`, `*.pem`, `*.key`, `.env` |
-| `bash`     | `curl`, `wget`               |
+**6. Network Isolation** — Full internet via rootless NAT. Container cannot access the host network. Port forwarding binds to `127.0.0.1`. Configurable to `none` mode for zero-network isolation.
 
 ---
 
 ## Configuration
 
-Create a per-project config with `opencode-pod init`, then customize:
-
 ```toml
 # opencode-pod.toml
 [container]
-name = "my-api"                        # optional, overrides dirname
-image = "cgr.dev/chainguard/wolfi-base:latest"
-packages = ["nodejs", "npm", "git", "openssh"]
-user = "dev"
+# name = "my-api"              # optional; defaults to directory name
+image = "cgr.dev/chainguard/wolfi-base:latest"  # any OCI image
+packages = ["nodejs", "npm", "git", "openssh"]  # apk packages to install
+user = "dev"                   # container user created on first launch
 
 [mounts]
-extra = ["~/.npmrc:/home/dev/.npmrc:ro"]
+extra = ["~/.npmrc:/home/dev/.npmrc:ro"]   # host:container[:ro]
 
 [env]
-NODE_ENV = "development"
+NODE_ENV = "development"       # any key=value pairs
 
 [network]
-mode = "bridge"                        # "bridge" or "none"
-forward = [3000, 8080]
+mode = "bridge"                # "bridge" (internet), "none" (isolated), or "host"
+forward = [3000, 8080]         # ports accessible from host
 
 [security]
-http = false                           # HTTPS-only at opencode level
-harden = true                          # seccomp, cap-drop, no-new-privileges
+http = false                   # true = allow HTTP, false = HTTPS-only
+harden = true                  # enable seccomp, cap-drop, no-new-privileges
 ```
 
 See `example/opencode-pod.toml` for a fully annotated reference.
 
 ---
 
-## Error Recovery
+## FAQ
 
-When things go wrong, `opencode-pod doctor` is your first step. Specific errors
-have specific fixes:
+**How is this different from `podman run -it`?**  
+`opencode-pod` automates image pull, user creation, SSH key generation, OpenCode install, permission rules, and checkpointed bootstrap. `podman run -it` leaves all of that to you.
 
-| Problem                       | Likely cause               | Fix                                      |
-|-------------------------------|----------------------------|------------------------------------------|
-| `podman: command not found`    | Podman not installed       | Run OS-specific install command printed  |
-| `image pull failed`           | Network or registry issue  | Check internet connectivity              |
-| `address already in use`      | Port conflict              | Change ports in config or free the port  |
-| `no space left on device`     | Disk full                  | `podman system prune`, clean old images  |
-| SELinux denial in logs        | SELinux context            | `restorecon -Rv /path/to/project`        |
-| `subuid/subgid not configured`| User namespace not set     | Run `opencode-pod doctor` for instructions |
-| APK network/unreachable       | Container network issue    | `opencode-pod doctor` to verify networking|
-| APK package not found / 404   | Wrong package name         | Check spelling, search Wolfi packages    |
+**Can I use this without OpenCode?**  
+Yes — the container is a functional dev sandbox with auto-detected toolchains and SSH keys. OpenCode is installed during setup, but you never have to run it.
 
-Bootstrap checkpoints also protect against partial failures — if setup is
-interrupted, re-running resumes from the last checkpoint rather than starting over.
+**Does this work with Docker instead of Podman?**  
+No. It's Podman-specific (rootless, daemonless, user-namespace isolation). Docker requires a daemon and `sudo`.
+
+**What about VS Code devcontainers?**  
+Different trade-off. Devcontainers give you IDE integration and Dockerfiles. `opencode-pod` gives you agent-specific hardening (API token isolation, deny rules) and instant `start`/`stop` with no daemon.
+
+**Can I share container setups with my team?**  
+Yes. Commit the `opencode-pod.toml` and optionally pin reusable profiles in `profiles/`. Everyone gets identical environments.
+
+**Container was destroyed — did I lose my work?**  
+No. Source code lives on the host at `$PWD`. Only the container home volume (tools, SSH keys, config) is lost. Re-run `setup` to recreate.
 
 ---
 
@@ -315,51 +167,32 @@ interrupted, re-running resumes from the last checkpoint rather than starting ov
 - **Bash 4+**
 - **No sudo needed** — everything runs rootless
 
-### OS Compatibility
-
-| OS      | Status                        |
-|---------|-------------------------------|
-| Linux   | Fully supported (primary target) — tested on Arch, Fedora, Ubuntu/Debian |
+| OS | Status |
+|----|--------|
+| Linux | Fully supported — tested on Arch, Fedora, Ubuntu/Debian |
 | Windows | Supported via **WSL2** (install Podman inside the WSL2 distro) |
-| macOS   | Not natively supported — use Podman machine or a Linux VM |
+| macOS | Not natively supported — use Podman machine or a Linux VM |
 
 ---
 
 ## Development
 
-### Test Suite
-
-78 unit tests + 3 integration tests using [bats](https://github.com/bats-core/bats-core):
+Tests use [bats](https://github.com/bats-core/bats-core):
 
 ```sh
-# Run all tests
 bats bats/*.bats
-
-# Run with TAP output
-bats --formatter tap bats/*.bats
+bats --formatter tap bats/*.bats   # TAP output
 ```
 
-Integration tests require a running Podman and are skipped automatically when
-Podman is unavailable or when running in CI without `PODMAN_INTEGRATION=1`.
-
-### CI
-
-GitHub Actions runs `shellcheck` on every script plus the full bats test suite
-on push and PR.
-
-### Structure
+Integration tests require a running Podman and are skipped automatically when unavailable. CI runs `shellcheck` + bats on every push and PR.
 
 ```
-opencode-pod          # main CLI entry point (287 lines)
-lib/
-  toml.sh             # TOML parser with mtime-based caching
-  distro.sh           # OS detection (Arch/Fedora/Ubuntu)
-  podman.sh           # Core lifecycle: create, setup, start, stop, destroy, bootstrap
-  security.sh         # Hardening flags, opencode config path
-defaults/             # Default config template
+opencode-pod          # CLI entry point
+lib/                  # Core modules (toml, distro, podman, security, profiles)
+defaults/             # Config template
 example/              # Annotated example configs
 bats/                 # Test files
-docs/                 # Additional documentation
+profiles/             # Reusable environment profiles
 ```
 
 ---
