@@ -247,10 +247,10 @@ cmd_profile_install() {
 import sys, json
 from datetime import datetime
 data = json.load(sys.stdin)
-name = "'"$name"'"
-version = "'"$version"'"
-desc = "'"$description"'"
-path = "profiles/'"$name"'/"
+name = sys.argv[1]
+version = sys.argv[2]
+desc = sys.argv[3]
+path = "profiles/" + name + "/"
 new_entry = {"name": name, "version": version, "description": desc, "path": path, "installed_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")}
 profiles = data.get("profiles", [])
 for i, p in enumerate(profiles):
@@ -261,8 +261,10 @@ else:
     profiles.append(new_entry)
 data["profiles"] = profiles
 print(json.dumps(data, indent=2))
-' 2>/dev/null)
-  _save_registry "$updated_registry"
+' "$name" "$version" "$description" 2>/dev/null)
+  if [[ -n "$updated_registry" ]]; then
+    _save_registry "$updated_registry"
+  fi
 
   if [[ "$network_mode" == "host" && -t 0 ]]; then
     printf 'Profile requires host networking. Update opencode-pod.toml? [y/N]: '
