@@ -310,13 +310,30 @@ teardown() {
   [[ "$output" == *"not found"* ]]
 }
 
-@test "cmd_profile_update success" {
+@test "cmd_profile_update same version skips without --force" {
   cd "$TESTDIR"
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
   mkdir -p "./profiles/ralph"
+  printf '{"name":"ralph","version":"1.0.0","description":"Test","path":"profiles/ralph/","components":{},"network":""}' > "./profiles/ralph/profile.json"
   touch "./profiles/ralph/ralph.tar.gz"
   touch "./profiles/ralph/setup.sh"
-  chmod -x "./profiles/ralph/setup.sh"
+  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"1.0.0","description":"Test","path":"profiles/ralph/","components":{},"network":""}]}'; }
+  export -f _fetch_index
+  run cmd_profile_update "ralph"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"already at"* ]]
+}
+
+@test "cmd_profile_update with version diff" {
+  cd "$TESTDIR"
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  mkdir -p "./profiles/ralph"
+  printf '{"name":"ralph","version":"0.1.0","description":"Old","path":"profiles/ralph/","components":{},"network":""}' > "./profiles/ralph/profile.json"
+  touch "./profiles/ralph/ralph.tar.gz"
+  touch "./profiles/ralph/setup.sh"
+  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"0.2.0","description":"New","path":"profiles/ralph/","components":{},"network":""}]}'; }
+  _load_registry() { printf '{"format_version":1,"profiles":[{"name":"ralph","version":"0.1.0"}]}'; }
+  _save_registry() { :; }
   curl() {
     case "$*" in
       *ralph.tar.gz*) printf 'updated-tarball' > "./profiles/ralph/ralph.tar.gz" ;;
@@ -324,25 +341,32 @@ teardown() {
     esac
     return 0
   }
-  export -f curl
+  python3() { command python3 "$@"; }
+  export -f _fetch_index _load_registry _save_registry curl python3
   run cmd_profile_update "ralph"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Profile 'ralph' updated"* ]]
-  [ -x "./profiles/ralph/setup.sh" ]
-  [ -f "./profiles/ralph/ralph.tar.gz" ]
+  [[ "$output" == *"0.1.0"* ]]
+  [[ "$output" == *"0.2.0"* ]]
+  [[ "$output" == *"updated"* ]]
+  [[ "$output" == *"setup.sh"* ]]
 }
 
-@test "cmd_profile_update tarball download failure" {
-  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
-  mkdir -p "$TESTDIR/profiles/ralph"
+@test "cmd_profile_update download failure restores backup" {
   cd "$TESTDIR"
-
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  mkdir -p "./profiles/ralph"
+  printf '{"name":"ralph","version":"0.1.0","description":"Old","path":"profiles/ralph/","components":{},"network":""}' > "./profiles/ralph/profile.json"
+  printf 'original-tarball' > "./profiles/ralph/ralph.tar.gz"
+  printf 'original-setup' > "./profiles/ralph/setup.sh"
+  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"0.2.0","description":"New","path":"profiles/ralph/","components":{},"network":""}]}'; }
   curl() { return 1; }
-  export -f curl
-
-  run cmd_profile_update ralph
+  python3() { command python3 "$@"; }
+  export -f _fetch_index curl python3
+  run cmd_profile_update "ralph"
   [ "$status" -eq 1 ]
   [[ "$output" == *"Failed to download"* ]]
+  [[ "$(cat "./profiles/ralph/ralph.tar.gz")" == "original-tarball" ]]
+  [[ "$(cat "./profiles/ralph/setup.sh")" == "original-setup" ]]
 }
 
 # --- Helper tests ---
