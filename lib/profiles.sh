@@ -267,6 +267,7 @@ print(json.dumps(data, indent=2))
   fi
 
   if [[ "$network_mode" == "host" && -t 0 ]]; then
+    local response
     printf 'Profile requires host networking. Update opencode-pod.toml? [y/N]: '
     read -r response
     if [[ "$response" =~ ^[yY] ]]; then
@@ -341,6 +342,7 @@ cmd_profile_update() {
   # Backup existing files
   local backup_dir
   backup_dir="$(mktemp -d)"
+  trap 'rm -rf "$backup_dir"' EXIT
   cp "./profiles/${name}/${name}.tar.gz" "$backup_dir/" 2>/dev/null || true
   cp "./profiles/${name}/setup.sh" "$backup_dir/" 2>/dev/null || true
 
@@ -400,6 +402,7 @@ print(json.dumps(data, indent=2))
 
   # Handle network mode changes
   if [[ -n "$new_network" && "$new_network" != "$old_network" && -t 0 ]]; then
+    local response
     printf 'Network mode changed (%s → %s). Update opencode-pod.toml? [y/N]: ' "$old_network" "$new_network"
     read -r response
     if [[ "$response" =~ ^[yY] ]]; then
