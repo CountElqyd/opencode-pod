@@ -1,0 +1,14 @@
+{
+  "name": "swarm",
+  "version": "0.1.0",
+  "description": "Verification-gated, architect-led multi-agent development — OpenCode Swarm plugin. 18 agents, gated QA pipeline, built-in SAST.",
+  "author": "opencode-pod",
+  "components": {
+    "skills": 0,
+    "agents": 18,
+    "commands": 30,
+    "plugin": "opencode-swarm"
+  },
+  "requires": ["nodejs", "npm"],
+  "network": "bridge"
+}
