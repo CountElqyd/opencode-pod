@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Swarm profile installer — run inside opencode-pod container
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VERSION_FILE="$SCRIPT_DIR/VERSION"
+
+# ---- Environment validation ----
+if [ ! -f "$VERSION_FILE" ]; then
+  echo "Error: VERSION file not found at $VERSION_FILE" >&2
+  exit 1
+fi
+
+if [ ! -d "$HOME" ]; then
+  echo "Error: HOME ($HOME) does not exist" >&2
+  exit 1
+fi
+
+VERSION=$(cat "$VERSION_FILE")
+
+# ---- Idempotency guard ----
+INSTALLED=$(cat "$HOME/.swarm-version" 2>/dev/null || echo "0.0.0")
+
+if [ "$INSTALLED" = "$VERSION" ]; then
+  echo "Swarm profile v$VERSION already installed"
+  exit 0
+fi
+
+echo "Installing Swarm profile v$VERSION..."
+
+# ---- Install opencode-swarm ----
+if ! command -v npm &>/dev/null; then
+  echo "Error: npm not found" >&2
+  exit 1
+fi
+
+echo "  Installing opencode-swarm via npm..."
+npm install -g opencode-swarm &>/dev/null || {
+  echo "Error: npm install failed" >&2
+  exit 1
+}
+
+echo "  Running opencode-swarm installer..."
+opencode-swarm install &>/dev/null || {
+  echo "Error: opencode-swarm install failed" >&2
+  exit 1
+}
+
+# ---- Copy pre-configured config ----
+CONFIG_SRC="$SCRIPT_DIR/src/config/opencode-swarm.json"
+if [ -f "$CONFIG_SRC" ]; then
+  mkdir -p "$HOME/.config/opencode"
+  cp "$CONFIG_SRC" "$HOME/.config/opencode/opencode-swarm.json"
+  echo "  Config: opencode-swarm.json installed"
+fi
+
+# ---- Record version ----
+echo "$VERSION" > "$HOME/.swarm-version"
+echo "Swarm profile v$VERSION installed successfully"
