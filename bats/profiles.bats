@@ -35,27 +35,36 @@ teardown() {
 
 # --- cmd_profile_list ---
 
-@test "cmd_profile_list prints table for valid index" {
+@test "cmd_profile_list prints table with installed column" {
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
-  curl() { printf '{"profiles":[{"name":"ralph","version":"1.0.0","description":"Ralph profile"},{"name":"ai","version":"2.0.0","description":"AI profile"}]}'; return 0; }
+  cd "$TESTDIR"
+  _load_registry() { printf '{"format_version":1,"profiles":[{"name":"ralph","version":"1.0.0"}]}'; }
+  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"1.0.0","description":"Ralph profile"},{"name":"ai","version":"2.0.0","description":"AI profile"}]}'; }
   python3() { command python3 "$@"; }
-  export -f curl python3
+  export -f _load_registry _fetch_index python3
   run cmd_profile_list
   [ "$status" -eq 0 ]
-  [[ "$output" == *"NAME"* ]]
-  [[ "$output" == *"VERSION"* ]]
-  [[ "$output" == *"DESCRIPTION"* ]]
+  [[ "$output" == *"INSTALLED"* ]]
   [[ "$output" == *"ralph"* ]]
   [[ "$output" == *"1.0.0"* ]]
-  [[ "$output" == *"Ralph profile"* ]]
-  [[ "$output" == *"ai"* ]]
-  [[ "$output" == *"2.0.0"* ]]
+}
+
+@test "cmd_profile_list shows — for not installed" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  _load_registry() { printf '{"format_version":1,"profiles":[]}'; }
+  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"1.0.0","description":"Ralph profile"}]}'; }
+  python3() { command python3 "$@"; }
+  export -f _load_registry _fetch_index python3
+  run cmd_profile_list
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"—"* ]]
 }
 
 @test "cmd_profile_list handles network failure" {
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
-  curl() { return 1; }
-  export -f curl
+  _fetch_index() { return 1; }
+  export -f _fetch_index
   run cmd_profile_list
   [ "$status" -eq 1 ]
   [[ "$output" == *"Unable to fetch profile index"* ]]
@@ -63,9 +72,10 @@ teardown() {
 
 @test "cmd_profile_list handles invalid JSON" {
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
-  curl() { printf 'not-json'; return 0; }
+  _fetch_index() { printf 'not-json'; return 0; }
+  _load_registry() { printf '{"format_version":1,"profiles":[]}'; }
   python3() { command python3 "$@"; }
-  export -f curl python3
+  export -f _fetch_index _load_registry python3
   run cmd_profile_list
   [ "$status" -eq 1 ]
   [[ "$output" == *"Invalid profile index format"* ]]

@@ -55,28 +55,33 @@ sys.exit(1)
 }
 
 cmd_profile_list() {
-  local url
-  url="$(github_raw_url)/profiles/index.json"
-
-  local json
-  json=$(curl -sS --fail "$url" 2>/dev/null) || {
+  local index
+  index=$(_fetch_index) || {
     printf 'Error: Unable to fetch profile index from GitHub.\n' >&2
     exit 1
   }
 
-  printf '%-20s %-10s %s\n' 'NAME' 'VERSION' 'DESCRIPTION'
-  printf '%s\n' "$json" | python3 -c '
+  local registry
+  registry=$(_load_registry)
+
+  printf '%-20s %-8s %-10s %s\n' 'NAME' 'VERSION' 'INSTALLED' 'DESCRIPTION'
+  printf '%s\n' "$index" | python3 -c '
 import sys, json
 try:
     data = json.load(sys.stdin)
 except json.JSONDecodeError:
     sys.exit(2)
+
+registry = json.loads(sys.argv[1]) if sys.argv[1] else {"profiles": []}
+registry_map = {p["name"]: p.get("version", "?") for p in registry.get("profiles", [])}
+
 for p in data.get("profiles", []):
     name = p.get("name", "?")
     ver = p.get("version", "?")
     desc = p.get("description", "")
-    print(f"{name:<20} {ver:<10} {desc}")
-' || {
+    installed = registry_map.get(name, "\u2014")
+    print(f"{name:<20} {ver:<8} {installed:<10} {desc}")
+' "$registry" 2>/dev/null || {
     local rc=$?
     if [[ $rc -eq 2 ]]; then
       printf 'Error: Invalid profile index format.\n' >&2
