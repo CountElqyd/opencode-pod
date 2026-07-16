@@ -9,11 +9,16 @@
 **Secure, disposable dev containers for the [OpenCode](https://opencode.ai) autonomous coding agent. Rootless Podman, one command, zero host access.**
 
 ```sh
-# One-time install
+# Install the latest version (one-time). See below to uninstall.
 curl -fsSL https://raw.githubusercontent.com/CountElqyd/opencode-pod/main/install.sh | sh
 
 # Start coding in any project
 cd my-project && opencode-pod start
+```
+
+```sh
+# Uninstall (removes CLI, containers, volumes, and Wolfi image)
+curl -fsSL https://raw.githubusercontent.com/CountElqyd/opencode-pod/main/uninstall.sh | sh
 ```
 
 First run auto-detects your project type (Node, Python, Rust, Go), pulls a Wolfi base image, provisions the toolchain, generates SSH keys, and installs OpenCode — ~60s. After that, `start` is instant.
@@ -201,9 +206,9 @@ profiles/             # Reusable environment profiles
 
 This project builds on the work of several open-source projects and communities:
 
-- **[opencode-swarm](https://github.com/CountElqyd/opencode-swarm)** — Multi-agent swarm profiles for OpenCode
-- **[gstack](https://github.com/anomalyco/gstack)** — AI agent tooling and browser automation
-- **[GSD (Goal-Driven Development)](https://github.com/obra/gsd-core)** — Structured AI development methodology
+- **[OpenCode Swarm](https://github.com/ZaxbyHub/opencode-swarm)** — Architect-centric agentic swarm plugin for OpenCode with hub-and-spoke orchestration, SME consultation, code generation, and QA review
+- **[gstack](https://github.com/garrytan/gstack)** — Garry Tan's opinionated AI agent toolkit (23 specialist skills acting as CEO, designer, eng manager, QA, and release engineer) for Claude Code and other agents
+- **[GSD (Git. Ship. Done.)](https://github.com/open-gsd/gsd-core)** — Lightweight meta-prompting, context-engineering, and spec-driven development system
 - **[fabric](https://github.com/danielmiessler/fabric)** — AI-powered analysis patterns by Daniel Miessler
 - **[superpowers](https://github.com/obra/superpowers)** — Agent skill ecosystem by Obra
 - **[Podman](https://podman.io)** — Rootless container engine
