@@ -9,11 +9,16 @@
 **Secure, disposable dev containers for the [OpenCode](https://opencode.ai) autonomous coding agent. Rootless Podman, one command, zero host access.**
 
 ```sh
-# One-time install
+# Install the latest version (one-time). See below to uninstall.
 curl -fsSL https://raw.githubusercontent.com/CountElqyd/opencode-pod/main/install.sh | sh
 
 # Start coding in any project
 cd my-project && opencode-pod start
+```
+
+```sh
+# Uninstall (removes CLI, containers, volumes, and Wolfi image)
+curl -fsSL https://raw.githubusercontent.com/CountElqyd/opencode-pod/main/uninstall.sh | sh
 ```
 
 First run auto-detects your project type (Node, Python, Rust, Go), pulls a Wolfi base image, provisions the toolchain, generates SSH keys, and installs OpenCode — ~60s. After that, `start` is instant.
