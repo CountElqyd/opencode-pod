@@ -99,6 +99,10 @@ printf '\nInstalled to %s/bin/opencode-pod\n' "$DEST_DIR"
 printf '\nMake sure %s/bin is on your PATH:\n' "$DEST_DIR"
 # shellcheck disable=SC2016
 printf '  export PATH="%s/bin:$PATH"\n' "$DEST_DIR"
-printf '\nThen pull the Wolfi base image:\n'
-printf '  podman pull cgr.dev/chainguard/wolfi-base:latest\n'
-printf '\nReady. Run "opencode-pod start" in any project directory.\n'
+printf '\nReady. To use opencode-pod in a project directory:\n'
+printf '\nQuick start (auto-config):\n'
+printf '  opencode-pod start\n'
+printf '\nThis pulls the image and creates the container with default packages.\n'
+printf '\nExplicit setup (custom config):\n'
+printf '  opencode-pod init    # create opencode-pod.toml\n'
+printf '  opencode-pod setup   # provision the container\n'
