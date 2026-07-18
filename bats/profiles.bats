@@ -414,3 +414,15 @@ _fake_resolve() {
   [ "$status" -eq 0 ]
   [[ "$(cat "$TESTDIR/opencode-pod/profiles.json")" == "$test_json" ]]
 }
+
+@test "_save_registry path field is empty string for container-exec installs" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  export XDG_DATA_HOME="$TESTDIR"
+  local test_json='{"format_version":1,"profiles":[{"name":"ralph","version":"1.0.0","description":"Test","path":"","installed_at":"2026-07-19T00:00:00Z"}]}'
+  run _save_registry "$test_json"
+  [ "$status" -eq 0 ]
+  local saved
+  saved="$(cat "$TESTDIR/opencode-pod/profiles.json")"
+  [[ "$saved" == *'"path": ""'* ]]
+  [[ "$saved" == *'"ralph"'* ]]
+}
