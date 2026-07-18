@@ -276,7 +276,7 @@ for p in data.get('profiles', []):
     read -r response
     if [[ "$response" =~ ^[yY] ]]; then
       if [[ -f "opencode-pod.toml" ]]; then
-        sed -i '/^\[network\]/,/^\[/{s/mode = "bridge"/mode = "host"/}' "opencode-pod.toml"
+        sed -i '/^\[network\]/,/^\[/{s/mode = ".*"/mode = "host"/}' "opencode-pod.toml"
         printf 'Updated network mode to host in opencode-pod.toml.\n'
       else
         printf 'No opencode-pod.toml found. Set [network] mode = "host" manually.\n' >&2
