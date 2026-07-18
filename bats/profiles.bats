@@ -166,6 +166,12 @@ teardown() {
 
 # --- cmd_profile_install ---
 
+_fake_resolve() {
+  CONTAINER_NAME="opencode-pod-test-abc123"
+  CONTAINER_STATE="${1:-running}"
+  export CONTAINER_NAME CONTAINER_STATE
+}
+
 @test "cmd_profile_install requires name" {
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
   run cmd_profile_install
@@ -180,107 +186,109 @@ teardown() {
   [[ "$output" == *"Invalid profile name"* ]]
 }
 
-@test "cmd_profile_install already installed without --force" {
-  cd "$TESTDIR"
+@test "cmd_profile_install fails when container nonexistent" {
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
-  mkdir -p "./profiles/ralph"
+  resolve_project() { CONTAINER_STATE="nonexistent"; export CONTAINER_STATE; return 0; }
+  export -f resolve_project
+  run cmd_profile_install "ralph"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"setup first"* ]]
+}
+
+@test "cmd_profile_install already installed without --force" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  resolve_project() { _fake_resolve; }
+  _load_registry() { printf '{"format_version":1,"profiles":[{"name":"ralph","version":"1.0.0"}]}'; }
+  export -f resolve_project _load_registry _fake_resolve
   run cmd_profile_install "ralph"
   [ "$status" -eq 1 ]
   [[ "$output" == *"Already installed"* ]]
 }
 
-@test "cmd_profile_install --force overwrites existing" {
-  cd "$TESTDIR"
+@test "cmd_profile_install --force re-installs even if installed" {
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
-  mkdir -p "./profiles/ralph"
-  printf 'old' > "./profiles/ralph/ralph.tar.gz"
-
-  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"1.0.0","description":"Test","path":"profiles/ralph/","components":{},"network":""}]}'; }
+  resolve_project() { _fake_resolve; }
+  _load_registry() { printf '{"format_version":1,"profiles":[{"name":"ralph","version":"1.0.0"}]}'; }
   _save_registry() { :; }
-  curl() {
-    case "$*" in
-      *ralph.tar.gz*) printf 'new-tarball' > "./profiles/ralph/ralph.tar.gz" ;;
-      *setup.sh*) printf '#!/bin/bash\necho hello' > "./profiles/ralph/setup.sh" ;;
-    esac
-    return 0
-  }
+  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"1.0.0","description":"Test","components":{},"network":""}]}'; }
+  podman() { printf '%s\n' "$*" > "$TESTDIR/podman_called"; return 0; }
   python3() { command python3 "$@"; }
-  export -f _fetch_index _save_registry curl python3
+  export -f resolve_project _load_registry _save_registry _fetch_index podman python3 _fake_resolve
   run cmd_profile_install "ralph" "--force"
   [ "$status" -eq 0 ]
   [[ "$output" == *"installed"* ]]
-  [[ "$output" == *"1.0.0"* ]]
-  [ -x "./profiles/ralph/setup.sh" ]
-  [ -f "./profiles/ralph/ralph.tar.gz" ]
-  [ -f "./profiles/ralph/profile.json" ]
+  [[ "$(cat "$TESTDIR/podman_called")" == *"exec"* ]]
+  [[ "$(cat "$TESTDIR/podman_called")" == *"ralph"* ]]
 }
 
-@test "cmd_profile_install success" {
-  cd "$TESTDIR"
+@test "cmd_profile_install success execs setup inside container" {
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
-  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"1.0.0","description":"Test","path":"profiles/ralph/","components":{},"network":""}]}'; }
+  resolve_project() { _fake_resolve; }
+  _load_registry() { printf '{"format_version":1,"profiles":[]}'; }
   _save_registry() { :; }
-  curl() {
-    case "$*" in
-      *ralph.tar.gz*) mkdir -p "./profiles/ralph"; printf 'fake-tarball' > "./profiles/ralph/ralph.tar.gz" ;;
-      *setup.sh*) printf '#!/bin/bash\necho hello' > "./profiles/ralph/setup.sh" ;;
-    esac
-    return 0
-  }
+  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"1.0.0","description":"Test","components":{},"network":""}]}'; }
+  podman() { printf '%s\n' "$*" > "$TESTDIR/podman_called"; return 0; }
   python3() { command python3 "$@"; }
-  export -f _fetch_index _save_registry curl python3
+  export -f resolve_project _load_registry _save_registry _fetch_index podman python3 _fake_resolve
   run cmd_profile_install "ralph"
   [ "$status" -eq 0 ]
   [[ "$output" == *"installed"* ]]
   [[ "$output" == *"1.0.0"* ]]
-  [ -x "./profiles/ralph/setup.sh" ]
-  [ -f "./profiles/ralph/ralph.tar.gz" ]
-  [ -f "./profiles/ralph/profile.json" ]
+  local podman_args
+  podman_args="$(cat "$TESTDIR/podman_called")"
+  [[ "$podman_args" == *"exec"* ]]
+  [[ "$podman_args" == *"-u dev"* ]]
+  [[ "$podman_args" == *"opencode-pod-test-abc123"* ]]
+  [[ "$podman_args" == *"curl"* ]]
+  [[ "$podman_args" == *"setup.sh"* ]]
+  [[ "$podman_args" == *"ralph.tar.gz"* ]]
+  [[ "$podman_args" == *"/tmp/.opencode-profile-ralph"* ]]
 }
 
-@test "cmd_profile_install tarball download failure cleans up" {
-  cd "$TESTDIR"
+@test "cmd_profile_install start container if stopped" {
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
-  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"1.0.0","description":"Test","path":"profiles/ralph/","components":{},"network":""}]}'; }
-  curl() {
-    if [[ "$*" == *"profile.json"* ]]; then
-      printf '{"name":"ralph","version":"1.0.0"}'
+  local start_called=0
+  resolve_project() { _fake_resolve "exited"; }
+  podman() {
+    if [[ "$*" == "start"* ]]; then
+      start_called=1
       return 0
     fi
-    return 1
+    printf '%s\n' "$*" > "$TESTDIR/podman_called"; return 0
   }
+  _load_registry() { printf '{"format_version":1,"profiles":[]}'; }
+  _save_registry() { :; }
+  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"1.0.0","description":"Test","components":{},"network":""}]}'; }
   python3() { command python3 "$@"; }
-  export -f _fetch_index curl python3
+  export -f resolve_project podman _load_registry _save_registry _fetch_index python3 _fake_resolve
+  export start_called
   run cmd_profile_install "ralph"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"Failed to download"* ]]
-  [ ! -d "./profiles/ralph" ]
+  [ "$status" -eq 0 ]
+  [ "$start_called" -eq 1 ]
 }
 
-@test "cmd_profile_install setup.sh download failure cleans up" {
-  cd "$TESTDIR"
+@test "cmd_profile_install setup failure not recorded in registry" {
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
-  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"1.0.0","description":"Test","path":"profiles/ralph/","components":{},"network":""}]}'; }
-  curl() {
-    case "$*" in
-      *ralph.tar.gz*) mkdir -p "$TESTDIR/profiles/ralph"; printf 'tarball' > "$TESTDIR/profiles/ralph/ralph.tar.gz"; return 0 ;;
-      *setup.sh*) return 1 ;;
-    esac
-    return 0
-  }
+  resolve_project() { _fake_resolve; }
+  _load_registry() { printf '{"format_version":1,"profiles":[]}'; }
+  _save_registry() { printf 'SAVED=%s\n' "$1" > "$TESTDIR/saved_registry"; }
+  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"1.0.0","description":"Test","components":{},"network":""}]}'; }
+  podman() { return 1; }
   python3() { command python3 "$@"; }
-  export -f _fetch_index curl python3
+  export -f resolve_project _load_registry _save_registry _fetch_index podman python3 _fake_resolve
   run cmd_profile_install "ralph"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"Failed to download"* ]]
-  [ ! -d "$TESTDIR/profiles/ralph" ]
+  [[ "$output" == *"failed"* ]]
+  [ ! -f "$TESTDIR/saved_registry" ]
 }
 
 @test "cmd_profile_install unknown profile" {
-  cd "$TESTDIR"
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  resolve_project() { _fake_resolve; }
+  _load_registry() { printf '{"format_version":1,"profiles":[]}'; }
   _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"other","version":"1.0","description":"Other"}]}'; }
-  export -f _fetch_index
+  python3() { command python3 "$@"; }
+  export -f resolve_project _load_registry _fetch_index python3 _fake_resolve
   run cmd_profile_install "unknown"
   [ "$status" -eq 1 ]
   [[ "$output" == *"not found"* ]]
