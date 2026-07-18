@@ -341,7 +341,30 @@ cmd_profile_update() {
     printf 'Error: Invalid profile name. Use alphanumeric, dash, underscore.\n' >&2
     exit 1
   fi
-  if [[ ! -d "./profiles/${name}" ]]; then
+
+  resolve_project || {
+    printf "Error: Run 'opencode-pod setup' first.\n" >&2
+    exit 1
+  }
+
+  if [[ "$CONTAINER_STATE" == "nonexistent" ]]; then
+    printf "Error: Container not found. Run 'opencode-pod setup' first.\n" >&2
+    exit 1
+  fi
+
+  local registry
+  registry=$(_load_registry)
+  local installed_version
+  installed_version=$(printf '%s\n' "$registry" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+name = '$name'
+for p in data.get('profiles', []):
+    if p.get('name') == name:
+        print(p.get('version', ''))
+" 2>/dev/null || printf '')
+
+  if [[ -z "$installed_version" ]]; then
     printf "Profile not found. Run 'opencode-pod profile install %s' first.\n" "$name" >&2
     exit 1
   fi
@@ -357,63 +380,39 @@ cmd_profile_update() {
     exit 1
   fi
 
-  local new_version new_network new_description old_version old_network
+  local new_version new_network new_description
   new_version=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("version","?"))' 2>/dev/null)
   new_network=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("network",""))' 2>/dev/null || printf '')
   new_description=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("description",""))' 2>/dev/null || printf '')
 
-  if [[ -f "./profiles/${name}/profile.json" ]]; then
-    old_version=$(python3 -c 'import sys,json; print(json.load(open(sys.argv[1])).get("version","?"))' "./profiles/${name}/profile.json" 2>/dev/null || printf '?')
-    old_network=$(python3 -c 'import sys,json; print(json.load(open(sys.argv[1])).get("network",""))' "./profiles/${name}/profile.json" 2>/dev/null || printf '')
-  else
-    old_version="?"
-    old_network=""
-  fi
-
-  if [[ "$old_version" == "$new_version" ]] && ! $force; then
-    printf "Profile '%s' is already at v%s. Use --force to re-download.\n" "$name" "$new_version"
+  if [[ "$installed_version" == "$new_version" ]] && ! $force; then
+    printf "Profile '%s' is already at v%s. Use --force to re-install.\n" "$name" "$new_version"
     return 0
   fi
 
-  printf "Updating '%s': v%s → v%s\n" "$name" "$old_version" "$new_version"
+  printf "Updating '%s': v%s → v%s\n" "$name" "$installed_version" "$new_version"
 
-  # Backup existing files
-  local backup_dir
-  backup_dir="$(mktemp -d)"
-  trap 'rm -rf "$backup_dir"' EXIT
-  cp "./profiles/${name}/${name}.tar.gz" "$backup_dir/" 2>/dev/null || true
-  cp "./profiles/${name}/setup.sh" "$backup_dir/" 2>/dev/null || true
+  if [[ "$CONTAINER_STATE" != "running" ]]; then
+    printf "Starting container %s...\n" "$CONTAINER_NAME"
+    podman start "$CONTAINER_NAME" || {
+      printf 'Error: Failed to start container.\n' >&2
+      exit 1
+    }
+    sleep 1
+    CONTAINER_STATE="running"
+  fi
 
-  # Download new files
-  local tarball_url setup_url dl_failed=false
+  local tarball_url setup_url
   tarball_url="$(github_raw_url)/profiles/${name}/${name}.tar.gz"
-  if ! curl -sS --fail -o "./profiles/${name}/${name}.tar.gz" "$tarball_url" 2>/dev/null; then
-    dl_failed=true
-  fi
-
   setup_url="$(github_raw_url)/profiles/${name}/setup.sh"
-  if ! curl -sS --fail -o "./profiles/${name}/setup.sh" "$setup_url" 2>/dev/null; then
-    dl_failed=true
-  fi
 
-  if $dl_failed; then
-    # Restore from backup
-    cp "$backup_dir/${name}.tar.gz" "./profiles/${name}/" 2>/dev/null || true
-    cp "$backup_dir/setup.sh" "./profiles/${name}/" 2>/dev/null || true
-    rm -rf "$backup_dir"
-    printf 'Error: Failed to download profile archive. Restored previous version.\n' >&2
+  printf "Updating profile '%s' inside container...\n" "$name"
+
+  if ! _container_exec_setup "$name" "$tarball_url" "$setup_url"; then
+    printf 'Error: Profile update failed inside container.\n' >&2
     exit 1
   fi
-  rm -rf "$backup_dir"
 
-  chmod +x "./profiles/${name}/setup.sh"
-
-  # Save updated profile.json
-  printf '%s\n' "$profile_json" > "./profiles/${name}/profile.json"
-
-  # Update registry
-  local registry
-  registry=$(_load_registry)
   local updated_registry
   updated_registry=$(printf '%s\n' "$registry" | python3 -c '
 import sys, json
@@ -422,8 +421,7 @@ data = json.load(sys.stdin)
 name = sys.argv[1]
 version = sys.argv[2]
 desc = sys.argv[3]
-path = "profiles/" + name + "/"
-new_entry = {"name": name, "version": version, "description": desc, "path": path, "installed_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")}
+new_entry = {"name": name, "version": version, "description": desc, "path": "", "installed_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")}
 profiles = data.get("profiles", [])
 for i, p in enumerate(profiles):
     if p.get("name") == name:
@@ -434,24 +432,42 @@ else:
 data["profiles"] = profiles
 print(json.dumps(data, indent=2))
 ' "$name" "$new_version" "$new_description" 2>/dev/null)
-  if [[ -n "$updated_registry" ]]; then
+  if [[ -z "$updated_registry" ]]; then
+    printf 'Warning: Failed to update profile registry.\n' >&2
+  else
     _save_registry "$updated_registry"
   fi
 
-  # Handle network mode changes
-  if [[ -n "$new_network" && "$new_network" != "$old_network" && -t 0 ]]; then
-    local response
-    printf 'Network mode changed (%s → %s). Update opencode-pod.toml? [y/N]: ' "$old_network" "$new_network"
-    read -r response
-    if [[ "$response" =~ ^[yY] ]]; then
-      if [[ -f "opencode-pod.toml" ]]; then
-        sed -i '/^\[network\]/,/^\[/{s/mode = ".*"/mode = "'"$new_network"'"/}' "opencode-pod.toml"
-        printf 'Updated network mode to %s in opencode-pod.toml.\n' "$new_network"
+  if [[ -n "$new_network" && -t 0 ]]; then
+    local current_network
+    current_network=$(python3 -c '
+import sys, json
+try:
+    with open("opencode-pod.toml") as f:
+        for line in f:
+            line = line.strip()
+            if line == "[network]":
+                break
+        for line in f:
+            line = line.strip()
+            if line.startswith("mode"):
+                print(line.split("=", 1)[1].strip().strip("\"'\"'"))
+                break
+except Exception:
+    pass
+' 2>/dev/null || printf '')
+    if [[ -n "$current_network" && "$current_network" != "$new_network" ]]; then
+      local response
+      printf 'Network mode changed (%s → %s). Update opencode-pod.toml? [y/N]: ' "$current_network" "$new_network"
+      read -r response
+      if [[ "$response" =~ ^[yY] ]]; then
+        if [[ -f "opencode-pod.toml" ]]; then
+          sed -i '/^\[network\]/,/^\[/{s/mode = ".*"/mode = "'"$new_network"'"/}' "opencode-pod.toml"
+          printf 'Updated network mode to %s in opencode-pod.toml.\n' "$new_network"
+        fi
       fi
     fi
   fi
 
   printf "Profile '%s' updated to v%s.\n" "$name" "$new_version"
-  printf "To re-install inside the container, run:\n"
-  printf "  bash profiles/%s/setup.sh\n" "$name"
 }
