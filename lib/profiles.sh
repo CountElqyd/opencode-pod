@@ -215,9 +215,35 @@ cmd_profile_install() {
     exit 1
   fi
 
-  if [[ -d "./profiles/${name}" ]] && ! $force; then
+  resolve_project || {
+    printf "Error: Run 'opencode-pod setup' first.\n" >&2
+    exit 1
+  }
+
+  if [[ "$CONTAINER_STATE" == "nonexistent" ]]; then
+    printf "Error: Container not found. Run 'opencode-pod setup' first.\n" >&2
+    exit 1
+  fi
+
+  local registry
+  registry=$(_load_registry)
+  local installed_version
+  installed_version=$(printf '%s\n' "$registry" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+name = '$name'
+for p in data.get('profiles', []):
+    if p.get('name') == name:
+        print(p.get('version', ''))
+" 2>/dev/null || printf '')
+
+  if [[ -n "$installed_version" ]] && ! $force; then
     printf "Already installed. Run 'opencode-pod profile update %s' or use --force.\n" "$name" >&2
     exit 1
+  fi
+
+  if [[ "$CONTAINER_STATE" != "running" ]]; then
+    container_start
   fi
 
   local index
@@ -238,55 +264,6 @@ cmd_profile_install() {
   network_mode=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("network",""))' 2>/dev/null || printf '')
   description=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("description",""))' 2>/dev/null || printf '')
 
-  mkdir -p "./profiles/${name}"
-
-  local tarball_url setup_url
-  tarball_url="$(github_raw_url)/profiles/${name}/${name}.tar.gz"
-  if ! curl -sS --fail -o "./profiles/${name}/${name}.tar.gz" "$tarball_url" 2>/dev/null; then
-    rm -rf "./profiles/${name}"
-    printf 'Error: Failed to download profile archive.\n' >&2
-    exit 1
-  fi
-
-  setup_url="$(github_raw_url)/profiles/${name}/setup.sh"
-  if ! curl -sS --fail -o "./profiles/${name}/setup.sh" "$setup_url" 2>/dev/null; then
-    rm -rf "./profiles/${name}"
-    printf 'Error: Failed to download setup script.\n' >&2
-    exit 1
-  fi
-
-  chmod +x "./profiles/${name}/setup.sh"
-
-  # Save profile.json locally
-  printf '%s\n' "$profile_json" > "./profiles/${name}/profile.json"
-
-  # Update local registry
-  local registry
-  registry=$(_load_registry)
-  local updated_registry
-  updated_registry=$(printf '%s\n' "$registry" | python3 -c '
-import sys, json
-from datetime import datetime
-data = json.load(sys.stdin)
-name = sys.argv[1]
-version = sys.argv[2]
-desc = sys.argv[3]
-path = "profiles/" + name + "/"
-new_entry = {"name": name, "version": version, "description": desc, "path": path, "installed_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")}
-profiles = data.get("profiles", [])
-for i, p in enumerate(profiles):
-    if p.get("name") == name:
-        profiles[i] = new_entry
-        break
-else:
-    profiles.append(new_entry)
-data["profiles"] = profiles
-print(json.dumps(data, indent=2))
-' "$name" "$version" "$description" 2>/dev/null)
-  if [[ -n "$updated_registry" ]]; then
-    _save_registry "$updated_registry"
-  fi
-
   if [[ "$network_mode" == "host" && -t 0 ]]; then
     local response
     printf 'Profile requires host networking. Update opencode-pod.toml? [y/N]: '
@@ -301,9 +278,41 @@ print(json.dumps(data, indent=2))
     fi
   fi
 
-  printf "Profile '%s' (v%s) installed.\n" "$name" "$version"
-  printf "To install inside the container, run:\n"
-  printf "  bash profiles/%s/setup.sh\n" "$name"
+  local tarball_url setup_url
+  tarball_url="$(github_raw_url)/profiles/${name}/${name}.tar.gz"
+  setup_url="$(github_raw_url)/profiles/${name}/setup.sh"
+
+  printf "Installing profile '%s' (v%s) inside container...\n" "$name" "$version"
+
+  if ! _container_exec_setup "$name" "$tarball_url" "$setup_url"; then
+    printf 'Error: Profile setup failed inside container.\n' >&2
+    exit 1
+  fi
+
+  local updated_registry
+  updated_registry=$(printf '%s\n' "$registry" | python3 -c '
+import sys, json
+from datetime import datetime
+data = json.load(sys.stdin)
+name = sys.argv[1]
+version = sys.argv[2]
+desc = sys.argv[3]
+new_entry = {"name": name, "version": version, "description": desc, "path": "", "installed_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")}
+profiles = data.get("profiles", [])
+for i, p in enumerate(profiles):
+    if p.get("name") == name:
+        profiles[i] = new_entry
+        break
+else:
+    profiles.append(new_entry)
+data["profiles"] = profiles
+print(json.dumps(data, indent=2))
+' "$name" "$version" "$description" 2>/dev/null)
+  if [[ -n "$updated_registry" ]]; then
+    _save_registry "$updated_registry"
+  fi
+
+  printf "Profile '%s' (v%s) installed inside container.\n" "$name" "$version"
 }
 
 cmd_profile_update() {
