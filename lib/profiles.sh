@@ -21,7 +21,7 @@ _container_exec_setup() {
     mkdir -p \"\$TMP\" && cd \"\$TMP\"
     trap 'rm -rf \"\$TMP\"' EXIT
     set -e
-    curl -sS --fail -O '${tarball_url}' -O '${setup_url}'
+    curl -sS --fail -O '${tarball_url}' && curl -sS --fail -O '${setup_url}'
     chmod +x setup.sh
     bash setup.sh
   "
@@ -243,7 +243,13 @@ for p in data.get('profiles', []):
   fi
 
   if [[ "$CONTAINER_STATE" != "running" ]]; then
-    container_start
+    printf "Starting container %s...\n" "$CONTAINER_NAME"
+    podman start "$CONTAINER_NAME" || {
+      printf 'Error: Failed to start container.\n' >&2
+      exit 1
+    }
+    sleep 1
+    CONTAINER_STATE="running"
   fi
 
   local index
@@ -308,7 +314,9 @@ else:
 data["profiles"] = profiles
 print(json.dumps(data, indent=2))
 ' "$name" "$version" "$description" 2>/dev/null)
-  if [[ -n "$updated_registry" ]]; then
+  if [[ -z "$updated_registry" ]]; then
+    printf 'Warning: Failed to update profile registry.\n' >&2
+  else
     _save_registry "$updated_registry"
   fi
 
