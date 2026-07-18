@@ -310,71 +310,72 @@ _fake_resolve() {
   [[ "$output" == *"Invalid profile name"* ]]
 }
 
-@test "cmd_profile_update not installed" {
-  cd "$TESTDIR"
+@test "cmd_profile_update fails when container nonexistent" {
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  resolve_project() { CONTAINER_STATE="nonexistent"; export CONTAINER_STATE; return 0; }
+  _load_registry() { printf '{"format_version":1,"profiles":[{"name":"ralph","version":"1.0.0"}]}'; }
+  export -f resolve_project _load_registry
+  run cmd_profile_update "ralph"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"setup first"* ]]
+}
+
+@test "cmd_profile_update not installed" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  resolve_project() { _fake_resolve; }
+  _load_registry() { printf '{"format_version":1,"profiles":[]}'; }
+  export -f resolve_project _load_registry _fake_resolve
   run cmd_profile_update "ralph"
   [ "$status" -eq 1 ]
   [[ "$output" == *"not found"* ]]
 }
 
 @test "cmd_profile_update same version skips without --force" {
-  cd "$TESTDIR"
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
-  mkdir -p "./profiles/ralph"
-  printf '{"name":"ralph","version":"1.0.0","description":"Test","path":"profiles/ralph/","components":{},"network":""}' > "./profiles/ralph/profile.json"
-  touch "./profiles/ralph/ralph.tar.gz"
-  touch "./profiles/ralph/setup.sh"
-  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"1.0.0","description":"Test","path":"profiles/ralph/","components":{},"network":""}]}'; }
-  export -f _fetch_index
+  resolve_project() { _fake_resolve; }
+  _load_registry() { printf '{"format_version":1,"profiles":[{"name":"ralph","version":"1.0.0"}]}'; }
+  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"1.0.0","description":"Test","components":{},"network":""}]}'; }
+  python3() { command python3 "$@"; }
+  export -f resolve_project _load_registry _fetch_index python3 _fake_resolve
   run cmd_profile_update "ralph"
   [ "$status" -eq 0 ]
   [[ "$output" == *"already at"* ]]
 }
 
-@test "cmd_profile_update with version diff" {
-  cd "$TESTDIR"
+@test "cmd_profile_update with version diff execs setup" {
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
-  mkdir -p "./profiles/ralph"
-  printf '{"name":"ralph","version":"0.1.0","description":"Old","path":"profiles/ralph/","components":{},"network":""}' > "./profiles/ralph/profile.json"
-  touch "./profiles/ralph/ralph.tar.gz"
-  touch "./profiles/ralph/setup.sh"
-  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"0.2.0","description":"New","path":"profiles/ralph/","components":{},"network":""}]}'; }
+  resolve_project() { _fake_resolve; }
   _load_registry() { printf '{"format_version":1,"profiles":[{"name":"ralph","version":"0.1.0"}]}'; }
   _save_registry() { :; }
-  curl() {
-    case "$*" in
-      *ralph.tar.gz*) printf 'updated-tarball' > "./profiles/ralph/ralph.tar.gz" ;;
-      *setup.sh*) printf '#!/bin/bash\necho updated' > "./profiles/ralph/setup.sh" ;;
-    esac
-    return 0
-  }
+  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"0.2.0","description":"New","components":{},"network":""}]}'; }
+  podman() { printf '%s\n' "$*" > "$TESTDIR/podman_called"; return 0; }
   python3() { command python3 "$@"; }
-  export -f _fetch_index _load_registry _save_registry curl python3
+  export -f resolve_project _load_registry _save_registry _fetch_index podman python3 _fake_resolve
   run cmd_profile_update "ralph"
   [ "$status" -eq 0 ]
   [[ "$output" == *"0.1.0"* ]]
   [[ "$output" == *"0.2.0"* ]]
   [[ "$output" == *"updated"* ]]
-  [[ "$output" == *"setup.sh"* ]]
+  [[ "$(cat "$TESTDIR/podman_called")" == *"exec"* ]]
 }
 
-@test "cmd_profile_update download failure restores backup" {
-  cd "$TESTDIR"
+@test "cmd_profile_update setup failure not recorded in registry" {
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
-  mkdir -p "./profiles/ralph"
-  printf '{"name":"ralph","version":"0.1.0","description":"Old","path":"profiles/ralph/","components":{},"network":""}' > "./profiles/ralph/profile.json"
-  printf 'original-tarball' > "./profiles/ralph/ralph.tar.gz"
-  printf 'original-setup' > "./profiles/ralph/setup.sh"
-  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"0.2.0","description":"New","path":"profiles/ralph/","components":{},"network":""}]}'; }
-  curl() { return 1; }
+  resolve_project() { _fake_resolve; }
+  _load_registry() { printf '{"format_version":1,"profiles":[{"name":"ralph","version":"0.1.0"}]}'; }
+  _save_registry() { printf 'SAVED=%s\n' "$1" > "$TESTDIR/saved_registry"; }
+  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"0.2.0","description":"New","components":{},"network":""}]}'; }
+  podman() { return 1; }
   python3() { command python3 "$@"; }
-  export -f _fetch_index curl python3
+  export -f resolve_project _load_registry _save_registry _fetch_index podman python3 _fake_resolve
   run cmd_profile_update "ralph"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"Failed to download"* ]]
-  [[ "$(cat "./profiles/ralph/ralph.tar.gz")" == "original-tarball" ]]
-  [[ "$(cat "./profiles/ralph/setup.sh")" == "original-setup" ]]
+  [[ "$output" == *"failed"* ]]
+  [ ! -f "$TESTDIR/saved_registry" ]
+}
+
+@test "cmd_profile_update network mode prompt when mode changes" {
+  skip "Network mode prompt test requires interactive terminal simulation"
 }
 
 # --- Helper tests ---
