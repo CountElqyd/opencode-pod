@@ -6,6 +6,29 @@
 OPCODE_POD_REPO="${OPCODE_POD_REPO:-CountElqyd/opencode-pod}"
 OPCODE_POD_VERSION="${OPCODE_POD_VERSION:-main}"
 
+# shellcheck disable=SC1091
+source "${LIB_DIR}/podman.sh" 2>/dev/null || true
+
+_container_exec_setup() {
+  local name="$1"
+  local tarball_url="$2"
+  local setup_url="$3"
+
+  local tmp_dir="/tmp/.opencode-profile-${name}"
+
+  podman exec -u dev "$CONTAINER_NAME" sh -c "
+    set -e
+    TMP='${tmp_dir}'
+    mkdir -p \"\$TMP\" && cd \"\$TMP\"
+    curl -sS --fail -O '${tarball_url}' -O '${setup_url}'
+    chmod +x setup.sh
+    bash setup.sh
+    rc=\$?
+    rm -rf \"\$TMP\"
+    exit \$rc
+  "
+}
+
 github_raw_url() {
   printf 'https://raw.githubusercontent.com/%s/%s' "$OPCODE_POD_REPO" "$OPCODE_POD_VERSION"
 }
