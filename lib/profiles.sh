@@ -17,15 +17,13 @@ _container_exec_setup() {
   local tmp_dir="/tmp/.opencode-profile-${name}"
 
   podman exec -u dev "$CONTAINER_NAME" sh -c "
-    set -e
     TMP='${tmp_dir}'
     mkdir -p \"\$TMP\" && cd \"\$TMP\"
+    trap 'rm -rf \"\$TMP\"' EXIT
+    set -e
     curl -sS --fail -O '${tarball_url}' -O '${setup_url}'
     chmod +x setup.sh
     bash setup.sh
-    rc=\$?
-    rm -rf \"\$TMP\"
-    exit \$rc
   "
 }
 
