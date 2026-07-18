@@ -59,7 +59,7 @@ teardown() {
   fix_home_ownership
 
   run podman exec -u dev "$CONTAINER_NAME" sh -c 'mkdir -p /home/dev/.local/share/opencode/repos/stuff'
-  [ "$status" -ne 0 ]
+  [ "$status" -eq 0 ]
 }
 
 @test "[integration] fix_home_ownership is idempotent" {

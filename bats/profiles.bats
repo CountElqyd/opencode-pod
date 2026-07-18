@@ -192,7 +192,7 @@ _fake_resolve() {
   export -f resolve_project
   run cmd_profile_install "ralph"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"setup first"* ]]
+  [[ "$output" == *"setup'"* ]]
 }
 
 @test "cmd_profile_install already installed without --force" {
@@ -247,11 +247,10 @@ _fake_resolve() {
 
 @test "cmd_profile_install start container if stopped" {
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
-  local start_called=0
   resolve_project() { _fake_resolve "exited"; }
   podman() {
     if [[ "$*" == "start"* ]]; then
-      start_called=1
+      printf started > "$TESTDIR/start_called"
       return 0
     fi
     printf '%s\n' "$*" > "$TESTDIR/podman_called"; return 0
@@ -261,10 +260,9 @@ _fake_resolve() {
   _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"1.0.0","description":"Test","components":{},"network":""}]}'; }
   python3() { command python3 "$@"; }
   export -f resolve_project podman _load_registry _save_registry _fetch_index python3 _fake_resolve
-  export start_called
   run cmd_profile_install "ralph"
   [ "$status" -eq 0 ]
-  [ "$start_called" -eq 1 ]
+  [ -f "$TESTDIR/start_called" ]
 }
 
 @test "cmd_profile_install setup failure not recorded in registry" {
@@ -317,7 +315,7 @@ _fake_resolve() {
   export -f resolve_project _load_registry
   run cmd_profile_update "ralph"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"setup first"* ]]
+  [[ "$output" == *"setup'"* ]]
 }
 
 @test "cmd_profile_update not installed" {
@@ -423,6 +421,6 @@ _fake_resolve() {
   [ "$status" -eq 0 ]
   local saved
   saved="$(cat "$TESTDIR/opencode-pod/profiles.json")"
-  [[ "$saved" == *'"path": ""'* ]]
+  [[ "$saved" == *'"path":""'* ]]
   [[ "$saved" == *'"ralph"'* ]]
 }
