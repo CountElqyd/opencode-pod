@@ -92,14 +92,17 @@ if [ -d "$EXTRACTED/fabric-mcp" ]; then
 fi
 
 # ---- Install fabric-ai CLI ----
-if command -v pip3 &>/dev/null; then
-  echo "  fabric-ai: installing..."
-  pip3 install --user fabric-ai &>/dev/null && echo "  fabric-ai: installed" || echo "  Warning: fabric-ai install failed" >&2
-elif command -v uv &>/dev/null; then
+if ! command -v fabric-ai &>/dev/null; then
+  if ! command -v uv &>/dev/null; then
+    echo "  fabric-ai: installing uv..."
+    curl -LsSf https://astral.sh/uv/install.sh | UV_UNMANAGED_INSTALL="$HOME/.local" sh
+    export PATH="$HOME/.local/bin:$PATH"
+  fi
   echo "  fabric-ai: installing via uv..."
-  uv pip install --system fabric-ai &>/dev/null && echo "  fabric-ai: installed" || echo "  Warning: fabric-ai install failed" >&2
+  uv pip install --system fabric-ai
+  echo "  fabric-ai: installed"
 else
-  echo "  Warning: fabric-ai not installed (neither pip3 nor uv available)" >&2
+  echo "  fabric-ai: already installed"
 fi
 
 # ---- Record version ----
