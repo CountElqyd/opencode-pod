@@ -32,6 +32,7 @@ teardown() {
   testdir="$(mktemp -d)"
   cp -r "$BATS_TEST_DIRNAME/../profiles/ralph" "$testdir/ralph"
   mkdir -p "$testdir/ralph/src"
+  printf '{"profiles":[{"name":"ralph","version":"0.2.1"}]}\n' > "$testdir/index.json"
   run bash "$testdir/ralph/build.sh"
   [ "$status" -eq 0 ]
   [ -f "$testdir/ralph/ralph.tar.gz" ]
