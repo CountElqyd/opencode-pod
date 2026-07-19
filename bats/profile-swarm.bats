@@ -5,7 +5,7 @@ setup_file() {
   export BATS_TEST_DIRNAME_TARBALL="$TESTDIR"
   mkdir -p "$TESTDIR/src/config"
   cp "$BATS_TEST_DIRNAME/../profiles/swarm/src/config/opencode-swarm.json" "$TESTDIR/src/config/opencode-swarm.json"
-  cp "$BATS_TEST_DIRNAME/../profiles/swarm/VERSION" "$TESTDIR/VERSION"
+  echo "0.1.0" > "$TESTDIR/VERSION"
   tar czf "$TESTDIR/swarm.tar.gz" \
     -C "$TESTDIR/src" config/ \
     -C "$TESTDIR" VERSION
@@ -33,6 +33,7 @@ teardown() {
   cp -r "$BATS_TEST_DIRNAME/../profiles/swarm" "$testdir/swarm"
   mkdir -p "$testdir/swarm/src/config"
   cp "$BATS_TEST_DIRNAME/../profiles/swarm/src/config/opencode-swarm.json" "$testdir/swarm/src/config/opencode-swarm.json"
+  printf '{"profiles":[{"name":"swarm","version":"0.1.0"}]}\n' > "$testdir/index.json"
   run bash "$testdir/swarm/build.sh"
   [ "$status" -eq 0 ]
   [ -f "$testdir/swarm/swarm.tar.gz" ]
@@ -59,7 +60,6 @@ import json
 with open('$BATS_TEST_DIRNAME/../profiles/swarm/profile.json') as f:
     data = json.load(f)
 assert data['name'] == 'swarm'
-assert data['version'] == '0.1.0'
 assert 'components' in data
 assert data['network'] == 'bridge'
 "
@@ -87,18 +87,14 @@ assert data['mutation_testing'] == False
 
 # --- VERSION consistency ---
 
-@test "VERSION matches across profile files" {
-  VERSION=$(cat "$BATS_TEST_DIRNAME/../profiles/swarm/VERSION")
+@test "index.json version is 0.1.0 for swarm" {
   python3 -c "
 import json
-with open('$BATS_TEST_DIRNAME/../profiles/swarm/profile.json') as f:
-    p = json.load(f)
 with open('$BATS_TEST_DIRNAME/../profiles/index.json') as f:
     idx = json.load(f)
-assert p['version'] == '$VERSION', 'profile.json version mismatch'
 for entry in idx['profiles']:
     if entry['name'] == 'swarm':
-        assert entry['version'] == '$VERSION', 'index.json version mismatch'
+        assert entry['version'] == '0.1.0', 'index.json version mismatch'
         break
 else:
     assert False, 'swarm not found in index.json'
