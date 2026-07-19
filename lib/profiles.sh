@@ -270,16 +270,44 @@ for p in data.get('profiles', []):
   network_mode=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("network",""))' 2>/dev/null || printf '')
   description=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("description",""))' 2>/dev/null || printf '')
 
-  if [[ "$network_mode" == "host" && -t 0 ]]; then
-    local response
-    printf 'Profile requires host networking. Update opencode-pod.toml? [y/N]: '
-    read -r response
-    if [[ "$response" =~ ^[yY] ]]; then
-      if [[ -f "opencode-pod.toml" ]]; then
-        sed -i '/^\[network\]/,/^\[/{s/mode = ".*"/mode = "host"/}' "opencode-pod.toml"
-        printf 'Updated network mode to host in opencode-pod.toml.\n'
+  if [[ "$network_mode" == "host" ]]; then
+    if [[ ! -t 0 ]]; then
+      printf 'Error: Profile "%s" requires host networking but stdin is not a terminal.\n' "$name" >&2
+      printf 'Run interactively to confirm container recreation.\n' >&2
+      exit 1
+    fi
+
+    local current_network
+    current_network="$(podman container inspect -f '{{.HostConfig.NetworkMode}}' "$CONTAINER_NAME" 2>/dev/null || echo "nonexistent")"
+
+    if [[ "$current_network" != "host" ]]; then
+      printf 'Profile "%s" requires host networking (current: %s).\n' "$name" "$current_network"
+      printf 'The container must be destroyed and recreated. Continue? [y/N]: '
+      local response
+      read -r response
+      if [[ "$response" =~ ^[yY] ]]; then
+        if [[ -f "opencode-pod.toml" ]]; then
+          sed -i '/^\[network\]/,/^\[/{s/mode = ".*"/mode = "host"/}' "opencode-pod.toml"
+          CONFIG_NETWORK_MODE="host"
+          printf '  Updated network mode to host in opencode-pod.toml.\n'
+        fi
+        printf '  Destroying container...\n'
+        container_destroy || true
+        CONTAINER_STATE="nonexistent"
+        printf '  Recreating container with host networking...\n'
+        container_setup || {
+          printf 'Error: Container recreate failed.\n' >&2
+          exit 1
+        }
+        podman start "$CONTAINER_NAME" || {
+          printf 'Error: Failed to start recreated container.\n' >&2
+          exit 1
+        }
+        sleep 1
+        CONTAINER_STATE="running"
       else
-        printf 'No opencode-pod.toml found. Set [network] mode = "host" manually.\n' >&2
+        printf 'Install cancelled.\n'
+        exit 1
       fi
     fi
   fi
