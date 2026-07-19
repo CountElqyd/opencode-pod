@@ -93,14 +93,19 @@ fi
 
 # ---- Install fabric-ai CLI ----
 if ! command -v fabric-ai &>/dev/null; then
-  if ! command -v uv &>/dev/null; then
+  UV_BIN="$HOME/.local/bin/uv"
+  if ! command -v uv &>/dev/null && [ ! -x "$UV_BIN" ]; then
     echo "  fabric-ai: installing uv..."
-    curl -LsSf https://astral.sh/uv/install.sh | UV_UNMANAGED_INSTALL="$HOME/.local" sh
+    curl -LsSf https://astral.sh/uv/install.sh | UV_UNMANAGED_INSTALL="$HOME/.local" sh 2>/dev/null || true
     export PATH="$HOME/.local/bin:$PATH"
   fi
-  echo "  fabric-ai: installing via uv..."
-  "$HOME/.local/bin/uv" pip install --system fabric-ai
-  echo "  fabric-ai: installed"
+  if [ -x "$UV_BIN" ]; then
+    echo "  fabric-ai: installing via uv..."
+    "$UV_BIN" pip install --system fabric-ai
+    echo "  fabric-ai: installed"
+  else
+    echo "  Warning: uv not available, skipping fabric-ai" >&2
+  fi
 else
   echo "  fabric-ai: already installed"
 fi
