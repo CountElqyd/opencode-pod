@@ -1,6 +1,5 @@
 {
   "name": "ralph",
-  "version": "0.2.0",
   "description": "Full GSD-Core + G-Stack ecosystem for autonomous development",
   "author": "Ralph",
   "components": {
