@@ -288,6 +288,7 @@ for p in data.get('profiles', []):
       if [[ "$response" =~ ^[yY] ]]; then
         if [[ -f "opencode-pod.toml" ]]; then
           sed -i '/^\[network\]/,/^\[/{s/mode = ".*"/mode = "host"/}' "opencode-pod.toml"
+          # shellcheck disable=SC2034 # used in podman.sh:container_create
           CONFIG_NETWORK_MODE="host"
           printf '  Updated network mode to host in opencode-pod.toml.\n'
         fi

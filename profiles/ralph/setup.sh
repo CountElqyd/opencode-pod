@@ -99,7 +99,7 @@ if ! command -v fabric-ai &>/dev/null; then
     export PATH="$HOME/.local/bin:$PATH"
   fi
   echo "  fabric-ai: installing via uv..."
-  uv pip install --system fabric-ai
+  "$HOME/.local/bin/uv" pip install --system fabric-ai
   echo "  fabric-ai: installed"
 else
   echo "  fabric-ai: already installed"
