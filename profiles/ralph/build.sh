@@ -5,20 +5,25 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC_DIR="$SCRIPT_DIR/src"
 OUTPUT="$SCRIPT_DIR/ralph.tar.gz"
+INDEX="$SCRIPT_DIR/../index.json"
 
-if [ ! -d "$SRC_DIR" ]; then
-  echo "Error: src/ directory not found at $SRC_DIR" >&2
-  exit 1
-fi
+NAME="$(basename "$SCRIPT_DIR")"
+VERSION=$(python3 -c "
+import sys, json
+data = json.load(open('$INDEX'))
+for p in data.get('profiles', []):
+    if p.get('name') == '$NAME':
+        print(p.get('version', '0.0.0'))
+" 2>/dev/null || echo "0.0.0")
 
-if [ ! -f "$SCRIPT_DIR/VERSION" ]; then
-  echo "Error: VERSION file not found at $SCRIPT_DIR/VERSION" >&2
-  exit 1
-fi
+echo "Building Ralph profile v$VERSION..."
 
-echo "Building Ralph profile v$(cat "$SCRIPT_DIR/VERSION")..."
+TMPDIR=$(mktemp -d)
+trap 'rm -rf "$TMPDIR"' EXIT
+echo "$VERSION" > "$TMPDIR/VERSION"
+
 tar cf - --sort=name --owner=0 --group=0 --mtime="@0" \
   -C "$SRC_DIR" config/ skills/ agents/ commands/ fabric-mcp/ gsd-core/ \
-  -C "$SCRIPT_DIR" VERSION | gzip -n > "$OUTPUT"
+  -C "$TMPDIR" VERSION | gzip -n > "$OUTPUT"
 
 echo "Created: $OUTPUT ($(du -h "$OUTPUT" | cut -f1))"
