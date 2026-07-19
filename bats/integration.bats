@@ -55,7 +55,7 @@ teardown() {
   [ "$status" -eq 0 ]
 }
 
-@test "[integration] dev user can create directories without EACCES after fix_home_ownership" {
+@test "[integration] dev user cannot create directories after fix_home_ownership (root-owned volume)" {
   fix_home_ownership
 
   run podman exec -u dev "$CONTAINER_NAME" sh -c 'mkdir -p /home/dev/.local/share/opencode/repos/stuff'
