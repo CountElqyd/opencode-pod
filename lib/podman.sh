@@ -445,5 +445,6 @@ container_destroy() {
   printf '%s\n' "Destroying container: $CONTAINER_NAME"
   podman rm -f "$CONTAINER_NAME" 2>/dev/null || true
   podman volume rm "$HOME_VOLUME" 2>/dev/null || true
-  printf '%s\n' "Container and home volume removed."
+  rm -f "$(_profile_registry_path)" 2>/dev/null || true
+  printf '%s\n' "Container, home volume, and profile registry removed."
 }
