@@ -176,7 +176,23 @@ fix_home_ownership() {
     printf 'WARNING: could not resolve home volume mountpoint; ownership fix aborted\n' >&2
     return 1
   }
-  if ! podman unshare chown -R 1000:1000 "$mountpoint"; then
+
+  local probe_file=".opencode_uid_probe_$$"
+  podman unshare touch "$mountpoint/$probe_file" 2>/dev/null || true
+  local probe_uid
+  probe_uid=$(podman exec -u 0 "$CONTAINER_NAME" stat -c '%u' "/home/dev/$probe_file" 2>/dev/null) || true
+  rm -f "$mountpoint/$probe_file" 2>/dev/null || true
+
+  local offset=0
+  if [[ "$probe_uid" == "1000" ]]; then
+    offset=0
+  elif [[ "$probe_uid" == "0" ]]; then
+    offset=1000
+  else
+    offset=1001
+  fi
+
+  if ! podman unshare chown -R "$offset:$offset" "$mountpoint" 2>/dev/null; then
     printf 'WARNING: failed to fix home directory ownership (dev user may lack write access)\n' >&2
     return 1
   fi

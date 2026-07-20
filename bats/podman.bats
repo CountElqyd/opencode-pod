@@ -643,9 +643,10 @@ EOF
 
 # --- fix_home_ownership ---
 
-@test "fix_home_ownership resolves mountpoint and chowns via podman unshare" {
+@test "fix_home_ownership chowns home volume via podman unshare" {
   source lib/podman.sh
   HOME_VOLUME="test-home-volume"
+  CONTAINER_NAME="test-container"
 
   podman() {
     case "$1" in
@@ -656,7 +657,11 @@ EOF
         fi
         ;;
       unshare)
-        printf '%s\n' "$*" > "$TESTDIR/unshare_args"
+        printf '%s\n' "$*" >> "$TESTDIR/unshare_calls"
+        return 0
+        ;;
+      exec)
+        printf '%s\n' "1000"
         return 0
         ;;
     esac
@@ -667,10 +672,10 @@ EOF
   run fix_home_ownership
   [ "$status" -eq 0 ]
 
-  local cmd
-  cmd="$(cat "$TESTDIR/unshare_args")"
-  [[ "$cmd" == *"chown -R 0:0"* ]]
-  [[ "$cmd" == *"/fake/mountpoint/path"* ]]
+  local cmds
+  cmds="$(cat "$TESTDIR/unshare_calls")"
+  [[ "$cmds" == *"chown -R 0:0"* ]]
+  [[ "$cmds" == *"/fake/mountpoint/path"* ]]
 }
 
 @test "fix_home_ownership warns and fails when volume inspect fails" {
@@ -693,6 +698,7 @@ EOF
 @test "fix_home_ownership warns and fails when podman unshare chown fails" {
   source lib/podman.sh
   HOME_VOLUME="test-home-volume"
+  CONTAINER_NAME="test-container"
 
   podman() {
     case "$1" in
@@ -702,7 +708,14 @@ EOF
           return 0
         fi
         ;;
-      unshare) return 1 ;;
+      unshare)
+        if [[ "$*" == *"touch"* ]]; then return 0; fi
+        return 1
+        ;;
+      exec)
+        printf '%s\n' "1000"
+        return 0
+        ;;
     esac
     return 0
   }
@@ -728,7 +741,12 @@ EOF
   podman() {
     case "$1" in
       start) return 0 ;;
-      exec) return 0 ;;
+      exec)
+        if [[ "$*" == *"stat"* ]]; then
+          printf '%s\n' "1000"
+        fi
+        return 0
+        ;;
       cp) return 0 ;;
       volume)
         if [[ "$2" == "inspect" ]]; then
@@ -749,10 +767,10 @@ EOF
   [ "$status" -eq 0 ]
   [[ "$output" == *"Bootstrap complete"* ]]
 
-  local cmd
-  cmd="$(cat "$TESTDIR/unshare_calls")"
-  [[ "$cmd" == *"chown -R 0:0"* ]]
-  [[ "$cmd" == *"$TESTDIR/fake-mount"* ]]
+  local cmds
+  cmds="$(cat "$TESTDIR/unshare_calls")"
+  [[ "$cmds" == *"chown -R 0:0"* ]]
+  [[ "$cmds" == *"$TESTDIR/fake-mount"* ]]
 }
 
 @test "run_bootstrap completes despite fix_home_ownership failure" {
@@ -883,10 +901,15 @@ EOF
         return 0
         ;;
       unshare)
-        printf '%s\n' "$*" > "$TESTDIR/unshare_args"
+        printf '%s\n' "$*" >> "$TESTDIR/unshare_calls"
         return 0
         ;;
-      exec) return 0 ;;
+      exec)
+        if [[ "$*" == *"stat"* ]]; then
+          printf '%s\n' "1000"
+        fi
+        return 0
+        ;;
     esac
     return 0
   }
@@ -895,9 +918,10 @@ EOF
   run container_start
   [ "$status" -eq 0 ]
 
-  local cmd
-  cmd="$(cat "$TESTDIR/unshare_args")"
-  [[ "$cmd" == *"chown -R 0:0"* ]]
+  local cmds
+  cmds="$(cat "$TESTDIR/unshare_calls")"
+  [[ "$cmds" == *"chown -R 0:0"* ]]
+  [[ "$cmds" == *"$TESTDIR/fake-mount"* ]]
 }
 
 @test "bootstrap installs ncurses-terminfo-base for terminal support" {
