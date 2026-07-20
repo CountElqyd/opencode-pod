@@ -769,6 +769,258 @@ EOF
   [[ "$output" == *"WARNING"* ]]
 }
 
+@test "fix_home_ownership uses offset 1000 when probe returns UID 0 (old keep-id)" {
+  source lib/podman.sh
+  HOME_VOLUME="test-home-volume"
+  CONTAINER_NAME="test-container"
+
+  podman() {
+    case "$1" in
+      volume)
+        if [[ "$2" == "inspect" ]]; then
+          printf '%s\n' "/fake/mountpoint/path"
+          return 0
+        fi
+        ;;
+      unshare)
+        printf '%s\n' "$*" >> "$TESTDIR/unshare_calls"
+        return 0
+        ;;
+      exec)
+        if [[ "$*" == *"verify"* ]]; then
+          printf '%s\n' "1000"
+          return 0
+        fi
+        printf '%s\n' "0"
+        return 0
+        ;;
+    esac
+    return 0
+  }
+  export -f podman
+
+  run fix_home_ownership
+  [ "$status" -eq 0 ]
+
+  local cmds
+  cmds="$(cat "$TESTDIR/unshare_calls")"
+  [[ "$cmds" == *"chown -R 1000:1000"* ]]
+  [[ "$cmds" == *"/fake/mountpoint/path"* ]]
+}
+
+@test "fix_home_ownership falls back from offset 0 to 1000 when probe returns UID 1000" {
+  source lib/podman.sh
+  HOME_VOLUME="test-home-volume"
+  CONTAINER_NAME="test-container"
+
+  podman() {
+    case "$1" in
+      volume)
+        if [[ "$2" == "inspect" ]]; then
+          printf '%s\n' "/fake/mountpoint/path"
+          return 0
+        fi
+        ;;
+      unshare)
+        if [[ "$*" == *"chown -R 0:0"* ]]; then
+          return 1
+        fi
+        printf '%s\n' "$*" >> "$TESTDIR/unshare_calls"
+        return 0
+        ;;
+      exec)
+        if [[ "$*" == *"verify"* ]]; then
+          printf '%s\n' "1000"
+          return 0
+        fi
+        printf '%s\n' "1000"
+        return 0
+        ;;
+    esac
+    return 0
+  }
+  export -f podman
+
+  run fix_home_ownership
+  [ "$status" -eq 0 ]
+
+  local cmds
+  cmds="$(cat "$TESTDIR/unshare_calls")"
+  [[ "$cmds" == *"chown -R 1000:1000"* ]]
+}
+
+@test "fix_home_ownership falls back when probe returns UID 0 and offset 1000 fails" {
+  source lib/podman.sh
+  HOME_VOLUME="test-home-volume"
+  CONTAINER_NAME="test-container"
+
+  podman() {
+    case "$1" in
+      volume)
+        if [[ "$2" == "inspect" ]]; then
+          printf '%s\n' "/fake/mountpoint/path"
+          return 0
+        fi
+        ;;
+      unshare)
+        if [[ "$*" == *"chown -R 1000:1000"* ]]; then
+          return 1
+        fi
+        printf '%s\n' "$*" >> "$TESTDIR/unshare_calls"
+        return 0
+        ;;
+      exec)
+        if [[ "$*" == *"verify"* ]]; then
+          printf '%s\n' "1000"
+          return 0
+        fi
+        printf '%s\n' "0"
+        return 0
+        ;;
+    esac
+    return 0
+  }
+  export -f podman
+
+  run fix_home_ownership
+  [ "$status" -eq 0 ]
+
+  local cmds
+  cmds="$(cat "$TESTDIR/unshare_calls")"
+  [[ "$cmds" == *"chown -R 1001:1001"* ]]
+}
+
+@test "fix_home_ownership falls back when probe returns UID 1001 and offset 1000 fails" {
+  source lib/podman.sh
+  HOME_VOLUME="test-home-volume"
+  CONTAINER_NAME="test-container"
+
+  podman() {
+    case "$1" in
+      volume)
+        if [[ "$2" == "inspect" ]]; then
+          printf '%s\n' "/fake/mountpoint/path"
+          return 0
+        fi
+        ;;
+      unshare)
+        if [[ "$*" == *"chown -R 1000:1000"* ]]; then
+          return 1
+        fi
+        printf '%s\n' "$*" >> "$TESTDIR/unshare_calls"
+        return 0
+        ;;
+      exec)
+        if [[ "$*" == *"verify"* ]]; then
+          printf '%s\n' "1000"
+          return 0
+        fi
+        printf '%s\n' "1001"
+        return 0
+        ;;
+    esac
+    return 0
+  }
+  export -f podman
+
+  run fix_home_ownership
+  [ "$status" -eq 0 ]
+
+  local cmds
+  cmds="$(cat "$TESTDIR/unshare_calls")"
+  [[ "$cmds" == *"chown -R 0:0"* ]]
+}
+
+@test "fix_home_ownership.all-fail probe UID 1000" {
+  source lib/podman.sh
+  HOME_VOLUME="test-home-volume"
+  CONTAINER_NAME="test-container"
+
+  podman() {
+    case "$1" in
+      volume)
+        if [[ "$2" == "inspect" ]]; then
+          printf '%s\n' "/fake/mountpoint/path"
+          return 0
+        fi
+        ;;
+      unshare)
+        return 1
+        ;;
+      exec)
+        printf '%s\n' "1000"
+        return 0
+        ;;
+    esac
+    return 0
+  }
+  export -f podman
+
+  run fix_home_ownership
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"WARNING"* ]]
+}
+
+@test "fix_home_ownership.all-fail probe UID 0" {
+  source lib/podman.sh
+  HOME_VOLUME="test-home-volume"
+  CONTAINER_NAME="test-container"
+
+  podman() {
+    case "$1" in
+      volume)
+        if [[ "$2" == "inspect" ]]; then
+          printf '%s\n' "/fake/mountpoint/path"
+          return 0
+        fi
+        ;;
+      unshare)
+        return 1
+        ;;
+      exec)
+        printf '%s\n' "0"
+        return 0
+        ;;
+    esac
+    return 0
+  }
+  export -f podman
+
+  run fix_home_ownership
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"WARNING"* ]]
+}
+
+@test "fix_home_ownership.all-fail probe UID 1001" {
+  source lib/podman.sh
+  HOME_VOLUME="test-home-volume"
+  CONTAINER_NAME="test-container"
+
+  podman() {
+    case "$1" in
+      volume)
+        if [[ "$2" == "inspect" ]]; then
+          printf '%s\n' "/fake/mountpoint/path"
+          return 0
+        fi
+        ;;
+      unshare)
+        return 1
+        ;;
+      exec)
+        printf '%s\n' "1001"
+        return 0
+        ;;
+    esac
+    return 0
+  }
+  export -f podman
+
+  run fix_home_ownership
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"WARNING"* ]]
+}
+
 @test "run_bootstrap calls fix_home_ownership at the beginning" {
   mkdir -p "$TESTDIR/project"
   cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
