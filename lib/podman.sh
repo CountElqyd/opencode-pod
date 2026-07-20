@@ -183,15 +183,33 @@ fix_home_ownership() {
   probe_uid=$(podman exec -u 0 "$CONTAINER_NAME" stat -c '%u' "/home/dev/$probe_file" 2>/dev/null) || true
   rm -f "$mountpoint/$probe_file" 2>/dev/null || true
 
-  local offset=1000
+  local -a trial_offsets
   if [[ "$probe_uid" == "1000" ]]; then
-    offset=0
+    trial_offsets=(0 1000 1001)
+  elif [[ "$probe_uid" == "0" ]]; then
+    trial_offsets=(1000 1001 0)
+  else
+    trial_offsets=(1000 0 1001)
   fi
 
-  if ! podman unshare chown -R "$offset:$offset" "$mountpoint" 2>/dev/null; then
-    printf 'WARNING: failed to fix home directory ownership (dev user may lack write access)\n' >&2
-    return 1
-  fi
+  local verify_file=".opencode_verify_$$"
+  podman unshare touch "$mountpoint/$verify_file" 2>/dev/null || true
+
+  for offset in "${trial_offsets[@]}"; do
+    if ! podman unshare chown -R "$offset:$offset" "$mountpoint" 2>/dev/null; then
+      continue
+    fi
+    local check_uid
+    check_uid=$(podman exec -u 0 "$CONTAINER_NAME" stat -c '%u' "/home/dev/$verify_file" 2>/dev/null) || true
+    if [[ "$check_uid" == "1000" ]]; then
+      rm -f "$mountpoint/$verify_file" 2>/dev/null || true
+      return 0
+    fi
+  done
+
+  rm -f "$mountpoint/$verify_file" 2>/dev/null || true
+  printf 'WARNING: failed to fix home directory ownership (dev user may lack write access)\n' >&2
+  return 1
 }
 
 run_bootstrap() {

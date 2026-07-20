@@ -661,6 +661,10 @@ EOF
         return 0
         ;;
       exec)
+        if [[ "$*" == *"verify"* ]]; then
+          printf '%s\n' "1000"
+          return 0
+        fi
         printf '%s\n' "1000"
         return 0
         ;;
@@ -696,6 +700,10 @@ EOF
         return 0
         ;;
       exec)
+        if [[ "$*" == *"verify"* ]]; then
+          printf '%s\n' "1000"
+          return 0
+        fi
         printf '%s\n' "1001"
         return 0
         ;;
