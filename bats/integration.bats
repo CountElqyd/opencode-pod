@@ -55,11 +55,11 @@ teardown() {
   [ "$status" -eq 0 ]
 }
 
-@test "[integration] dev user cannot create directories after fix_home_ownership (root-owned volume)" {
+@test "[integration] dev user can create directories after fix_home_ownership (keep-id volume)" {
   fix_home_ownership
 
   run podman exec -u dev "$CONTAINER_NAME" sh -c 'mkdir -p /home/dev/.local/share/opencode/repos/stuff'
-  [ "$status" -ne 0 ]
+  [ "$status" -eq 0 ]
 }
 
 @test "[integration] fix_home_ownership is idempotent" {
