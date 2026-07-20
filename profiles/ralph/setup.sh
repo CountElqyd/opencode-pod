@@ -96,12 +96,14 @@ if ! command -v fabric-ai &>/dev/null; then
   UV_BIN="$HOME/.local/bin/uv"
   if ! command -v uv &>/dev/null && [ ! -x "$UV_BIN" ]; then
     echo "  fabric-ai: installing uv..."
-    curl -LsSf https://astral.sh/uv/install.sh | UV_UNMANAGED_INSTALL="$HOME/.local" sh 2>/dev/null || true
+    mkdir -p "$HOME/.local/bin"
+    curl -LsSf https://github.com/astral-sh/uv/releases/latest/download/uv-x86_64-unknown-linux-gnu.tar.gz | tar xz -C "$HOME/.local/bin" --strip-components=1
     export PATH="$HOME/.local/bin:$PATH"
   fi
   if [ -x "$UV_BIN" ]; then
-    echo "  fabric-ai: installing via uv..."
-    "$UV_BIN" pip install --system fabric-ai
+    echo "  fabric-ai: downloading fabric binary..."
+    curl -LsSf https://github.com/danielmiessler/fabric/releases/latest/download/fabric_Linux_x86_64.tar.gz | tar xz -C "$HOME/.local/bin" fabric
+    mv "$HOME/.local/bin/fabric" "$HOME/.local/bin/fabric-ai"
     echo "  fabric-ai: installed"
   else
     echo "  Warning: uv not available, skipping fabric-ai" >&2
@@ -109,6 +111,13 @@ if ! command -v fabric-ai &>/dev/null; then
 else
   echo "  fabric-ai: already installed"
 fi
+
+# ---- Add ~/.local/bin to PATH ----
+grep -qs '\.local/bin' "$HOME/.zshenv" 2>/dev/null || {
+  printf '\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$HOME/.zshenv"
+  echo "  PATH: ~/.local/bin added to \$HOME/.zshenv"
+}
+. "$HOME/.zshenv"
 
 # ---- Record version ----
 echo "$VERSION" > "$HOME/.ralph-version"
