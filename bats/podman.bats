@@ -678,6 +678,41 @@ EOF
   [[ "$cmds" == *"/fake/mountpoint/path"* ]]
 }
 
+@test "fix_home_ownership uses offset 1000 when probe returns host UID 1001 (CI)" {
+  source lib/podman.sh
+  HOME_VOLUME="test-home-volume"
+  CONTAINER_NAME="test-container"
+
+  podman() {
+    case "$1" in
+      volume)
+        if [[ "$2" == "inspect" ]]; then
+          printf '%s\n' "/fake/mountpoint/path"
+          return 0
+        fi
+        ;;
+      unshare)
+        printf '%s\n' "$*" >> "$TESTDIR/unshare_calls"
+        return 0
+        ;;
+      exec)
+        printf '%s\n' "1001"
+        return 0
+        ;;
+    esac
+    return 0
+  }
+  export -f podman
+
+  run fix_home_ownership
+  [ "$status" -eq 0 ]
+
+  local cmds
+  cmds="$(cat "$TESTDIR/unshare_calls")"
+  [[ "$cmds" == *"chown -R 1000:1000"* ]]
+  [[ "$cmds" == *"/fake/mountpoint/path"* ]]
+}
+
 @test "fix_home_ownership warns and fails when volume inspect fails" {
   source lib/podman.sh
   HOME_VOLUME="test-home-volume"

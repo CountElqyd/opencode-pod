@@ -183,13 +183,9 @@ fix_home_ownership() {
   probe_uid=$(podman exec -u 0 "$CONTAINER_NAME" stat -c '%u' "/home/dev/$probe_file" 2>/dev/null) || true
   rm -f "$mountpoint/$probe_file" 2>/dev/null || true
 
-  local offset=0
+  local offset=1000
   if [[ "$probe_uid" == "1000" ]]; then
     offset=0
-  elif [[ "$probe_uid" == "0" ]]; then
-    offset=1000
-  else
-    offset=1001
   fi
 
   if ! podman unshare chown -R "$offset:$offset" "$mountpoint" 2>/dev/null; then

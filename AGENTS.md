@@ -6,18 +6,16 @@ When bumping `VERSION` for a release, also update `SCRIPT_VERSION` in `opencode-
 
 ## Permission fix for keep-id volumes
 
-The `fix_home_ownership` function uses a try-verify loop (offsets 0, 1000,
-1001) with a write verification via `podman exec ... test -w`. This handles
-all podman versions where keep-id maps host user to different container
-UIDs. Do NOT assume a single offset works universally — the mapping varies
-by podman version.
+The `fix_home_ownership` function uses a **probe approach**: creates a temp
+file via `podman unshare touch`, checks its container UID via `podman exec
+-u 0 stat` (root always exists), then runs a single `podman unshare chown`
+with the detected offset.
 
-When adding a new offset or changing the loop, ensure both the chown and
-verification are in the same `if`/`then` pair so wrong ownership is caught
-immediately.
+**Offset logic:** `probe_uid == 1000` → offset `0` (chown to host user =
+container dev). All other cases (probe == 0 for old keep-id, or probe ==
+host_uid ≠ 1000 for CI) → offset `1000` (chown to subuid-mapped namespace
+UID = container UID 1000).
 
-**Probe approach (replaces try-verify loop):** The current implementation
-creates a temp file via `podman unshare touch`, checks its container UID
-via `podman exec -u 0 stat` (root always exists), then runs a single
-`podman unshare chown` with the detected offset. This avoids the bootstrap
-problem where the dev user doesn't exist yet.
+This avoids the bootstrap problem where the dev user doesn't exist yet.
+Do NOT assume a single offset works universally — the mapping varies by
+podman version and host UID.
