@@ -176,7 +176,7 @@ fix_home_ownership() {
     printf 'WARNING: could not resolve home volume mountpoint; ownership fix aborted\n' >&2
     return 1
   }
-  if ! podman unshare chown -R 0:0 "$mountpoint"; then
+  if ! podman unshare chown -R 1000:1000 "$mountpoint"; then
     printf 'WARNING: failed to fix home directory ownership (dev user may lack write access)\n' >&2
     return 1
   fi
