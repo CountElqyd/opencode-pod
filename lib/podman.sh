@@ -193,9 +193,9 @@ fix_home_ownership() {
   fi
 
   local verify_file=".opencode_verify_$$"
-  podman unshare touch "$mountpoint/$verify_file" 2>/dev/null || true
 
   for offset in "${trial_offsets[@]}"; do
+    podman unshare touch "$mountpoint/$verify_file" 2>/dev/null || true
     if ! podman unshare chown -R "$offset:$offset" "$mountpoint" 2>/dev/null; then
       continue
     fi
@@ -207,7 +207,6 @@ fix_home_ownership() {
     fi
   done
 
-  rm -f "$mountpoint/$verify_file" 2>/dev/null || true
   printf 'WARNING: failed to fix home directory ownership (dev user may lack write access)\n' >&2
   return 1
 }
@@ -217,7 +216,7 @@ run_bootstrap() {
   podman cp "$CONTAINER_NAME:${BOOTSTRAP_PROGRESS_FILE}" "$progress" 2>/dev/null || true
   touch "$progress"
 
-  fix_home_ownership || true
+  fix_home_ownership
 
   local completed_all=true
 
@@ -448,7 +447,7 @@ container_start() {
     printf '%s\n' "Starting existing container: $CONTAINER_NAME"
     podman start "$CONTAINER_NAME" || return 1
     sleep 1
-    fix_home_ownership || true
+    fix_home_ownership
     run_bootstrap
     podman exec -it -u dev --workdir /workspace "$CONTAINER_NAME" /usr/bin/zsh 2>/dev/null || podman exec -it -u dev --workdir /workspace "$CONTAINER_NAME" /bin/sh
     return 0
