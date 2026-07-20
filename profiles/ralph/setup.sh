@@ -114,9 +114,11 @@ fi
 
 # ---- Add ~/.local/bin to PATH ----
 grep -qs '\.local/bin' "$HOME/.zshenv" 2>/dev/null || {
+  # shellcheck disable=SC2016
   printf '\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$HOME/.zshenv"
   echo "  PATH: ~/.local/bin added to \$HOME/.zshenv"
 }
+# shellcheck disable=SC1091
 . "$HOME/.zshenv"
 
 # ---- Record version ----
