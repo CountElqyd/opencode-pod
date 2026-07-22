@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.3.0] - 2026-07-23
+
+### Features
+- Swarm profile: verification-gated, architect-led multi-agent development
+- `--version` flag on CLI
+- Profile install/update runs setup automatically inside the container
+- Profile version tracking with diff, rollback, and state registry
+- Release automation: release.sh, git-cliff changelog generation, GitHub Release workflow
+
+### Bug Fixes
+- Ralph profile: fabric MCP installation, uv package management, PATH setup
+- Home volume ownership detection fix for Podman 6.0.1
+- Container destroy now updates profile registry
+- CI: reproducible tarballs, checkout@v4, shellcheck via apt
+
+### Documentation
+- AGENTS.md with version-sync reminder
+- README credits, badges, accurate command descriptions
+
 ## [0.2.0] - 2026-07-13
 
 ### Features
