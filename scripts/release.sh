@@ -28,30 +28,38 @@ else
   sed -i "s/^SCRIPT_VERSION=\".*\"$/SCRIPT_VERSION=\"$version\"/" opencode-pod
 fi
 
-echo "==> Generating changelog draft"
-if command -v git-cliff &>/dev/null; then
-  changedir=$(mktemp -d)
-  git cliff -u --unreleased > "$changedir/new-changelog.md"
-  echo "Changelog draft written to $changedir/new-changelog.md"
-  echo "Edit it, then paste the result into CHANGELOG.md under a ## [$version] - $(date +%F) header."
-  echo "When done, press enter to continue..."
-  read -r
-  echo "Opening changelog for manual edit..."
-  ${EDITOR:-vi} CHANGELOG.md
+if [ -z "${RELEASE_DRY_RUN:-}" ]; then
+  echo "==> Generating changelog draft"
+  if command -v git-cliff &>/dev/null; then
+    changedir=$(mktemp -d)
+    git cliff -u --unreleased > "$changedir/new-changelog.md"
+    echo "Changelog draft written to $changedir/new-changelog.md"
+    echo "Edit it, then paste the result into CHANGELOG.md under a ## [$version] - $(date +%F) header."
+    echo "When done, press enter to continue..."
+    read -r
+    echo "Opening changelog for manual edit..."
+    ${EDITOR:-vi} CHANGELOG.md
+  else
+    echo "git-cliff not found. Install it or manually write the changelog entry."
+    echo "See: https://github.com/orhun/git-cliff"
+    echo "Press enter when CHANGELOG.md is ready..."
+    read -r
+    ${EDITOR:-vi} CHANGELOG.md
+  fi
 else
-  echo "git-cliff not found. Install it or manually write the changelog entry."
-  echo "See: https://github.com/orhun/git-cliff"
-  echo "Press enter when CHANGELOG.md is ready..."
-  read -r
-  ${EDITOR:-vi} CHANGELOG.md
+  echo "==> [DRY RUN] Skipping changelog, commit, and tag"
 fi
 
-echo "==> Committing"
-git add VERSION opencode-pod CHANGELOG.md
-git commit -m "chore: release v$version"
+if [ -z "${RELEASE_DRY_RUN:-}" ]; then
+  echo "==> Committing"
+  git add VERSION opencode-pod CHANGELOG.md
+  git commit -m "chore: release v$version"
 
-echo "==> Tagging"
-git tag -a "v$version" -m "v$version"
+  echo "==> Tagging"
+  git tag -a "v$version" -m "v$version"
+else
+  echo "==> [DRY RUN] Would commit and tag v$version"
+fi
 
 echo ""
 echo "Done! Review with: git log --oneline -5"
