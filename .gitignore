@@ -7,3 +7,5 @@ docs/
 DESIGN.md
 opencode-swarm.md
 profiles_plan.md
+scripts/
+cliff.toml

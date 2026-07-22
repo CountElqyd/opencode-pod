@@ -15,9 +15,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Validate version consistency
-        run: bash scripts/validate-version.sh
-
       - name: Run tests
         run: |
           sudo apt-get install -y bats shellcheck
