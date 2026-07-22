@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run tests
+        run: |
+          sudo apt-get install -y bats shellcheck
+          bats bats/
+          shellcheck opencode-pod install.sh lib/*.sh
+
+      - name: Build profile tarballs
+        run: |
+          for profile in profiles/*/; do
+            if [ -f "${profile}build.sh" ]; then
+              bash "${profile}build.sh"
+            fi
+          done
+
+      - name: Extract changelog entry
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk "/^## \\[${VERSION}\\]/,/^## \\[/" CHANGELOG.md | head -n -2 > release_notes.md
+          echo "Release notes for v$VERSION:"
+          cat release_notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release_notes.md
+          files: |
+            profiles/**/*.tar.gz

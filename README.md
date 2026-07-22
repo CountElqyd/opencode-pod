@@ -43,9 +43,9 @@ Each project gets a rootless Podman container with a persistent home volume. You
 | Enter the sandbox | `opencode-pod start` | Instant after setup. Runs setup first if needed |
 | Suspend (preserve tools) | `opencode-pod stop` | Container pauses, home volume intact |
 | Resume a stopped project | `opencode-pod start` | Same command — idempotent |
-| List running containers | `opencode-pod status` | Shows state, project path, image |
-| Health check + diagnostics | `opencode-pod doctor` | Checks Podman, image, SELinux, disk. `--fix` repairs |
-| Refresh tools | `opencode-pod upgrade` | Checks image freshness (30-day). `--pull` to force |
+| Check current container state | `opencode-pod status` | Shows container name, state, project path, image |
+| Health check + diagnostics | `opencode-pod doctor` | Checks Podman, rootless mode, image, disk space |
+| Refresh tools | `opencode-pod upgrade` | Pulls fresh image if 30+ days old, syncs missing packages from config |
 | Manage environment profiles | `opencode-pod profile list\|info\|install\|update <name>` | Fetch/share reusable configs |
 | Wipe everything | `opencode-pod destroy` | Removes container + home volume |
 
@@ -83,17 +83,11 @@ Share and install pre-packaged OpenCode environments (skills, agents, config, to
 ```sh
 opencode-pod profile list                 # list available profiles
 opencode-pod profile info ralph           # show details
-opencode-pod profile install ralph        # download to ./profiles/ralph/
+opencode-pod profile install ralph        # download + install inside container
 opencode-pod profile update ralph         # re-download latest
 ```
 
-Inside the container, run the profile's `setup.sh` to install:
-
-```sh
-bash /workspace/profiles/ralph/setup.sh
-```
-
-Profiles can be committed to your repo (pinning a version for the team) or gitignored (each developer installs independently). See [`profiles/README.md`](profiles/README.md) for the convention and how to create custom profiles.
+`install` and `update` fetch the profile from GitHub and run setup inside the container automatically. Profiles can be committed to your repo (pinning a version for the team) or gitignored (each developer installs independently). See [`profiles/README.md`](profiles/README.md) for the convention and how to create custom profiles.
 
 ---
 
@@ -111,7 +105,7 @@ Six-layer isolation designed for autonomous agent containment:
 
 **5. API Token Isolation** — OpenCode's `auth.json` lives on the container's home volume. The bundled `opencode.json` permission rules deny the agent read/edit access to the token file, SSH keys, AWS creds, `.env`, and `*.pem`/`*.key` files. OpenCode itself can still use the token for LLM calls.
 
-**6. Network Isolation** — Full internet via rootless NAT. Container cannot access the host network. Port forwarding binds to `127.0.0.1`. Configurable to `none` mode for zero-network isolation.
+**6. Network Isolation** — Defaults to rootless NAT (bridge). Can be locked to `none` for offline workloads or `host` for local LLM access. Port forwarding binds to `127.0.0.1`.
 
 ---
 
@@ -177,28 +171,6 @@ No. Source code lives on the host at `$PWD`. Only the container home volume (too
 | Linux | Fully supported — tested on Arch, Fedora, Ubuntu/Debian |
 | Windows | Supported via **WSL2** (install Podman inside the WSL2 distro) |
 | macOS | Not natively supported — use Podman machine or a Linux VM |
-
----
-
-## Development
-
-Tests use [bats](https://github.com/bats-core/bats-core):
-
-```sh
-bats bats/*.bats
-bats --formatter tap bats/*.bats   # TAP output
-```
-
-Integration tests require a running Podman and are skipped automatically when unavailable. CI runs `shellcheck` + bats on every push and PR.
-
-```
-opencode-pod          # CLI entry point
-lib/                  # Core modules (toml, distro, podman, security, profiles)
-defaults/             # Config template
-example/              # Annotated example configs
-bats/                 # Test files
-profiles/             # Reusable environment profiles
-```
 
 ---
 
