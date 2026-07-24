@@ -13,17 +13,43 @@ _container_exec_setup() {
   local name="$1"
   local tarball_url="$2"
   local setup_url="$3"
+  local expected_sha256="${4:-}"
 
-  local tmp_dir="/tmp/.opencode-profile-${name}"
+  local host_tmp
+  host_tmp="$(mktemp -d)"
+  # shellcheck disable=SC2064
+  trap "rm -rf '$host_tmp'" RETURN
+
+  curl -sS --fail -o "$host_tmp/${name}.tar.gz" "$tarball_url" || {
+    printf 'Error: Failed to download profile tarball for %s\n' "$name" >&2
+    return 1
+  }
+  curl -sS --fail -o "$host_tmp/setup.sh" "$setup_url" || {
+    printf 'Error: Failed to download profile setup for %s\n' "$name" >&2
+    return 1
+  }
+
+  if [[ -n "$expected_sha256" ]]; then
+    local actual_sha256
+    actual_sha256="$(sha256sum "$host_tmp/${name}.tar.gz" | cut -d' ' -f1)"
+    if [[ "$actual_sha256" != "$expected_sha256" ]]; then
+      printf 'ERROR: Tarball checksum mismatch for profile %s\n' "$name" >&2
+      printf '  Expected: %s\n' "$expected_sha256" >&2
+      printf '  Got:      %s\n' "$actual_sha256" >&2
+      return 1
+    fi
+  fi
+
+  local container_tmp="/tmp/.opencode-profile-${name}"
+  podman exec "$CONTAINER_NAME" mkdir -p "$container_tmp"
+  podman cp "$host_tmp/${name}.tar.gz" "$CONTAINER_NAME:${container_tmp}/"
+  podman cp "$host_tmp/setup.sh" "$CONTAINER_NAME:${container_tmp}/"
 
   podman exec -u dev "$CONTAINER_NAME" sh -c "
-    TMP='${tmp_dir}'
-    mkdir -p \"\$TMP\" && cd \"\$TMP\"
-    trap 'rm -rf \"\$TMP\"' EXIT
-    set -e
-    curl -sS --fail -O '${tarball_url}' && curl -sS --fail -O '${setup_url}'
+    cd '$container_tmp'
     chmod +x setup.sh
     bash setup.sh
+    rm -rf '$container_tmp'
   "
 }
 
@@ -265,10 +291,11 @@ for p in data.get('profiles', []):
     exit 1
   fi
 
-  local version network_mode description
+  local version network_mode description sha256_value
   version=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("version","?"))' 2>/dev/null)
   network_mode=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("network",""))' 2>/dev/null || printf '')
   description=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("description",""))' 2>/dev/null || printf '')
+  sha256_value=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("sha256",""))' 2>/dev/null || printf '')
 
   if [[ "$network_mode" == "host" ]]; then
     if [[ ! -t 0 ]]; then
@@ -319,7 +346,7 @@ for p in data.get('profiles', []):
 
   printf "Installing profile '%s' (v%s) inside container...\n" "$name" "$version"
 
-  if ! _container_exec_setup "$name" "$tarball_url" "$setup_url"; then
+  if ! _container_exec_setup "$name" "$tarball_url" "$setup_url" "$sha256_value"; then
     printf 'Error: Profile setup failed inside container.\n' >&2
     exit 1
   fi
@@ -409,10 +436,11 @@ for p in data.get('profiles', []):
     exit 1
   fi
 
-  local new_version new_network new_description
+  local new_version new_network new_description new_sha256
   new_version=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("version","?"))' 2>/dev/null)
   new_network=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("network",""))' 2>/dev/null || printf '')
   new_description=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("description",""))' 2>/dev/null || printf '')
+  new_sha256=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("sha256",""))' 2>/dev/null || printf '')
 
   if [[ "$installed_version" == "$new_version" ]] && ! $force; then
     printf "Profile '%s' is already at v%s. Use --force to re-install.\n" "$name" "$new_version"
@@ -437,7 +465,7 @@ for p in data.get('profiles', []):
 
   printf "Updating profile '%s' inside container...\n" "$name"
 
-  if ! _container_exec_setup "$name" "$tarball_url" "$setup_url"; then
+  if ! _container_exec_setup "$name" "$tarball_url" "$setup_url" "$new_sha256"; then
     printf 'Error: Profile update failed inside container.\n' >&2
     exit 1
   fi

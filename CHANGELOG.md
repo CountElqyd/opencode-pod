@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.3.1] - 2026-07-24
+
+### Security
+- Profile tarball integrity: SHA256 checksum verification against `profiles/index.json` before container copy
+- OpenCode version pinning: npm install pinned to `SCRIPT_VERSION` (was unpinned `latest`)
+- Bootstrap race condition: atomic `mkdir` lock prevents concurrent `setup`/`start` from corrupting bootstrap state
+
+### Bug Fixes
+- Hardcoded `/home/dev` paths replaced with dynamic `CONTAINER_USER` throughout bootstrap (defaults to `dev`)
+- Cross-module guard: `container_destroy` checks for `_profile_registry_path` existence before calling
+- `opencode_config_path()` in `security.sh` now accepts a username parameter
+- Profile install test updated for host-side download + checksum verification flow
+
+### Documentation
+- `known-issues.md`: 7 documented recurring errors with causes and fixes
+- `project-map.md`: codebase structure, key file purposes, and critical constraints for cross-session orientation
+
 ## [0.3.0] - 2026-07-23
 
 ### Features

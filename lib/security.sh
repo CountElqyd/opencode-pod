@@ -6,5 +6,6 @@ security_flags() {
 }
 
 opencode_config_path() {
-  printf '%s' "/home/dev/.local/share/opencode/opencode.json"
+  local user="${1:-dev}"
+  printf '/home/%s/.local/share/opencode/opencode.json' "$user"
 }
