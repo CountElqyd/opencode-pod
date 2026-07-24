@@ -24,7 +24,7 @@ resolve_project() {
   parse_toml "$config_file" || return 1
 
   CONTAINER_IMAGE="${CONFIG_CONTAINER_IMAGE:-}"
-  CONTAINER_USER="${CONFIG_CONTAINER_USER:-}"
+  CONTAINER_USER="${CONFIG_CONTAINER_USER:-dev}"
 
   local raw_name
   if [[ -n "${CONFIG_CONTAINER_NAME:-}" ]]; then
@@ -156,7 +156,9 @@ classify_error() {
   esac
 }
 
-BOOTSTRAP_PROGRESS_FILE="/home/dev/.bootstrap-progress"
+bootstrap_home_dir() {
+  printf '/home/%s' "${CONTAINER_USER:-dev}"
+}
 
 is_bootstrap_step_done() {
   local progress_file="$1"
@@ -177,10 +179,12 @@ fix_home_ownership() {
     return 1
   }
 
+  local home_dir
+  home_dir="$(bootstrap_home_dir)"
   local probe_file=".opencode_uid_probe_$$"
   podman unshare touch "$mountpoint/$probe_file" 2>/dev/null || true
   local probe_uid
-  probe_uid=$(podman exec -u 0 "$CONTAINER_NAME" stat -c '%u' "/home/dev/$probe_file" 2>/dev/null) || true
+  probe_uid=$(podman exec -u 0 "$CONTAINER_NAME" stat -c '%u' "${home_dir}/${probe_file}" 2>/dev/null) || true
   rm -f "$mountpoint/$probe_file" 2>/dev/null || true
 
   local -a trial_offsets
@@ -200,20 +204,40 @@ fix_home_ownership() {
       continue
     fi
     local check_uid
-    check_uid=$(podman exec -u 0 "$CONTAINER_NAME" stat -c '%u' "/home/dev/$verify_file" 2>/dev/null) || true
+    check_uid=$(podman exec -u 0 "$CONTAINER_NAME" stat -c '%u' "${home_dir}/${verify_file}" 2>/dev/null) || true
     if [[ "$check_uid" == "1000" ]]; then
       rm -f "$mountpoint/$verify_file" 2>/dev/null || true
       return 0
     fi
   done
 
-  printf 'WARNING: failed to fix home directory ownership (dev user may lack write access)\n' >&2
+  printf 'WARNING: failed to fix home directory ownership (%s user may lack write access)\n' "${CONTAINER_USER:-dev}" >&2
   return 1
 }
 
 run_bootstrap() {
+  local bootstrap_lock="/tmp/.opencode-pod-bootstrap-${CONTAINER_NAME}.lock"
+  if ! mkdir "$bootstrap_lock" 2>/dev/null; then
+    printf '%s\n' "Another process is setting up this container. Waiting..." >&2
+    local waited=0
+    while ! mkdir "$bootstrap_lock" 2>/dev/null; do
+      sleep 1
+      waited=$((waited + 1))
+      if [[ $waited -ge 120 ]]; then
+        printf '%s\n' "Timed out waiting for bootstrap lock (>120s)." >&2
+        return 1
+      fi
+    done
+  fi
+  # shellcheck disable=SC2064
+  trap "rmdir '$bootstrap_lock' 2>/dev/null" RETURN
+
+  local container_user="${CONTAINER_USER:-dev}"
+  local home_dir
+  home_dir="$(bootstrap_home_dir)"
+
   local progress="/tmp/.bootstrap-progress-${CONTAINER_NAME}"
-  podman cp "$CONTAINER_NAME:${BOOTSTRAP_PROGRESS_FILE}" "$progress" 2>/dev/null || true
+  podman cp "$CONTAINER_NAME:${home_dir}/.bootstrap-progress" "$progress" 2>/dev/null || true
   touch "$progress"
 
   fix_home_ownership
@@ -250,13 +274,13 @@ run_bootstrap() {
   fi
 
   if ! is_bootstrap_step_done "$progress" "user_created"; then
-    printf '%s\n' "Creating user: dev"
+    printf '%s\n' "Creating user: ${container_user}"
     local adduser_stderr
     adduser_stderr="$(mktemp)"
-    if ! podman exec "$CONTAINER_NAME" sh -c "id dev 2>/dev/null || ( sed -i '/^[^:]*:[^:]*:1000:/d' /etc/passwd && sed -i '/^[^:]*:[^:]*:1000:/d' /etc/group && adduser -D -u 1000 -s /usr/bin/zsh dev)" 2>"$adduser_stderr"; then
+    if ! podman exec "$CONTAINER_NAME" sh -c "id ${container_user} 2>/dev/null || ( sed -i '/^[^:]*:[^:]*:1000:/d' /etc/passwd && sed -i '/^[^:]*:[^:]*:1000:/d' /etc/group && adduser -D -u 1000 -s /usr/bin/zsh ${container_user})" 2>"$adduser_stderr"; then
       printf '%s\n' "$(cat "$adduser_stderr")" >&2
       rm -f "$adduser_stderr"
-      printf '%s\n' "Failed to create dev user. Container may need --force-recreate." >&2
+      printf '%s\n' "Failed to create ${container_user} user. Container may need --force-recreate." >&2
       completed_all=false
     else
       mark_bootstrap_step "$progress" "user_created"
@@ -265,7 +289,7 @@ run_bootstrap() {
 
   if ! is_bootstrap_step_done "$progress" "ssh_key_generated"; then
     printf '%s\n' "Generating SSH key..."
-    if ! podman exec -u dev "$CONTAINER_NAME" sh -c "mkdir -p /home/dev/.ssh && ssh-keygen -t ed25519 -f /home/dev/.ssh/id_ed25519 -N '' -C 'opencode-pod'"; then
+    if ! podman exec -u "${container_user}" "$CONTAINER_NAME" sh -c "mkdir -p ${home_dir}/.ssh && ssh-keygen -t ed25519 -f ${home_dir}/.ssh/id_ed25519 -N '' -C 'opencode-pod'"; then
       printf '%s\n' "Failed to generate SSH key." >&2
       completed_all=false
     else
@@ -275,7 +299,7 @@ run_bootstrap() {
 
   if ! is_bootstrap_step_done "$progress" "nvm_installed"; then
     printf '%s\n' "Installing nvm..."
-    if podman exec -u dev "$CONTAINER_NAME" bash -c "
+    if podman exec -u "${container_user}" "$CONTAINER_NAME" bash -c "
       curl -fo- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash &&
       export NVM_DIR=\"\$HOME/.nvm\" &&
       [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\" &&
@@ -283,12 +307,9 @@ run_bootstrap() {
     "; then
       mark_bootstrap_step "$progress" "nvm_installed"
 
-      # nvm install script only configures existing profiles.
-      # Since /home/dev is empty, write .zshenv ourselves so zsh
-      # sources nvm in all shell modes (interactive + non-interactive).
-      podman exec -u dev "$CONTAINER_NAME" sh -c '
-        if ! grep -qs nvm /home/dev/.zshenv 2>/dev/null; then
-          cat > /home/dev/.zshenv << "EOF"
+      podman exec -u "${container_user}" "$CONTAINER_NAME" sh -c '
+        if ! grep -qs nvm '"${home_dir}"'/.zshenv 2>/dev/null; then
+          cat > '"${home_dir}"'/.zshenv << "EOF"
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 EOF
@@ -304,23 +325,22 @@ EOF
     printf '%s\n' "Copying OpenCode config..."
     local example_config="${OPCODE_POD_LIB_DIR:-$HOME/.local/share/opencode-pod}/../example/opencode.json"
     if [[ -f "$example_config" ]]; then
-      if ! podman exec -u dev "$CONTAINER_NAME" sh -c "mkdir -p /home/dev/.local/share/opencode"; then
+      if ! podman exec -u "${container_user}" "$CONTAINER_NAME" sh -c "mkdir -p ${home_dir}/.local/share/opencode"; then
         printf 'WARNING: failed to create opencode config directory\n' >&2
-      elif ! podman cp "$example_config" "$CONTAINER_NAME:/home/dev/.local/share/opencode/opencode.json"; then
+      elif ! podman cp "$example_config" "$CONTAINER_NAME:${home_dir}/.local/share/opencode/opencode.json"; then
         printf 'WARNING: failed to copy opencode config\n' >&2
       fi
     fi
-    # Always mark done — the example config is optional. Repeated failed
-    # attempts would just produce noise without changing the outcome.
     mark_bootstrap_step "$progress" "opencode_config_copied"
   fi
 
   if ! is_bootstrap_step_done "$progress" "opencode_installed"; then
     printf '%s\n' "Installing opencode..."
-    if podman exec -u dev "$CONTAINER_NAME" bash -c "
+    local opcode_version="${SCRIPT_VERSION:-latest}"
+    if podman exec -u "${container_user}" "$CONTAINER_NAME" bash -c "
       export NVM_DIR=\"\$HOME/.nvm\" &&
       [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\" &&
-      npm install -g opencode-ai
+      npm install -g opencode-ai@${opcode_version}
     "; then
       mark_bootstrap_step "$progress" "opencode_installed"
     else
@@ -329,7 +349,7 @@ EOF
     fi
   fi
 
-  podman cp "$progress" "$CONTAINER_NAME:${BOOTSTRAP_PROGRESS_FILE}" 2>/dev/null || true
+  podman cp "$progress" "$CONTAINER_NAME:${home_dir}/.bootstrap-progress" 2>/dev/null || true
   rm -f "$progress"
 
   if ! $completed_all; then
@@ -436,10 +456,11 @@ container_setup() {
 }
 
 container_start() {
+  local container_user="${CONTAINER_USER:-dev}"
   if [[ "$CONTAINER_STATE" == "running" ]]; then
     printf '%s\n' "Reattaching to running container: $CONTAINER_NAME"
     fix_home_ownership || true
-    podman exec -it -u dev --workdir /workspace "$CONTAINER_NAME" /usr/bin/zsh 2>/dev/null || podman exec -it -u dev --workdir /workspace "$CONTAINER_NAME" /bin/sh
+    podman exec -it -u "${container_user}" --workdir /workspace "$CONTAINER_NAME" /usr/bin/zsh 2>/dev/null || podman exec -it -u "${container_user}" --workdir /workspace "$CONTAINER_NAME" /bin/sh
     return 0
   fi
 
@@ -449,7 +470,7 @@ container_start() {
     sleep 1
     fix_home_ownership
     run_bootstrap
-    podman exec -it -u dev --workdir /workspace "$CONTAINER_NAME" /usr/bin/zsh 2>/dev/null || podman exec -it -u dev --workdir /workspace "$CONTAINER_NAME" /bin/sh
+    podman exec -it -u "${container_user}" --workdir /workspace "$CONTAINER_NAME" /usr/bin/zsh 2>/dev/null || podman exec -it -u "${container_user}" --workdir /workspace "$CONTAINER_NAME" /bin/sh
     return 0
   fi
 
@@ -474,6 +495,8 @@ container_destroy() {
   printf '%s\n' "Destroying container: $CONTAINER_NAME"
   podman rm -f "$CONTAINER_NAME" 2>/dev/null || true
   podman volume rm "$HOME_VOLUME" 2>/dev/null || true
-  rm -f "$(_profile_registry_path)" 2>/dev/null || true
+  if declare -f _profile_registry_path >/dev/null 2>&1; then
+    rm -f "$(_profile_registry_path)" 2>/dev/null || true
+  fi
   printf '%s\n' "Container, home volume, and profile registry removed."
 }

@@ -228,8 +228,17 @@ _fake_resolve() {
   _save_registry() { :; }
   _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"1.0.0","description":"Test","components":{},"network":""}]}'; }
   podman() { printf '%s\n' "$*" > "$TESTDIR/podman_called"; return 0; }
+  sha256sum() { printf 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  -\n'; }
+  curl() {
+    touch "$TESTDIR/curl_called"
+    case "$*" in
+      *ralph.tar.gz*) touch "$3" ;;
+      *setup.sh*)      touch "$3" ;;
+    esac
+    return 0
+  }
   python3() { command python3 "$@"; }
-  export -f resolve_project _load_registry _save_registry _fetch_index podman python3 _fake_resolve
+  export -f resolve_project _load_registry _save_registry _fetch_index podman python3 sha256sum curl _fake_resolve
   run cmd_profile_install "ralph"
   [ "$status" -eq 0 ]
   [[ "$output" == *"installed"* ]]
@@ -239,11 +248,12 @@ _fake_resolve() {
   [[ "$podman_args" == *"exec"* ]]
   [[ "$podman_args" == *"-u dev"* ]]
   [[ "$podman_args" == *"opencode-pod-test-abc123"* ]]
-  [[ "$podman_args" == *"curl"* ]]
   [[ "$podman_args" == *"setup.sh"* ]]
-  [[ "$podman_args" == *"ralph.tar.gz"* ]]
   [[ "$podman_args" == *"/tmp/.opencode-profile-ralph"* ]]
+  # curl is now called directly on the host (not through podman exec)
+  [[ -f "$TESTDIR/curl_called" ]]
 }
+
 
 @test "cmd_profile_install start container if stopped" {
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"

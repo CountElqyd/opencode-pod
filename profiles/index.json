@@ -14,6 +14,7 @@
         "fabric_mcp": true,
         "gsd_core": "1.5.0"
       },
+      "sha256": "017147d570c024263f9005b02ae030f681d6249ae3198e9589f49e8a5eab26c5",
       "requires": ["nodejs", "npm", "python3", "uv"],
       "network": "host"
     },
@@ -29,6 +30,7 @@
         "commands": 30,
         "plugin": "opencode-swarm"
       },
+      "sha256": "8a14373bc7286f3bb37a6fc685947d0c83af49c06278c78c765257f1c0e213b7",
       "requires": ["nodejs", "npm"],
       "network": "bridge"
     }
