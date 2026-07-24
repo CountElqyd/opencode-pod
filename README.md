@@ -1,7 +1,7 @@
 # opencode-pod
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.3.0-blue)](VERSION)
+[![Version](https://img.shields.io/badge/version-0.3.1-blue)](VERSION)
 [![Tests](https://img.shields.io/github/actions/workflow/status/CountElqyd/opencode-pod/test.yml?branch=main&label=tests)](https://github.com/CountElqyd/opencode-pod/actions)
 [![Shell](https://img.shields.io/badge/shell-bash-4EAA25?logo=gnubash)](https://www.gnu.org/software/bash/)
 [![Podman](https://img.shields.io/badge/podman-%3E%3D4.3-892CA0?logo=podman)](https://podman.io)
