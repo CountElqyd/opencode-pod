@@ -15,7 +15,12 @@
         "gsd_core": "1.5.0"
       },
       "sha256": "017147d570c024263f9005b02ae030f681d6249ae3198e9589f49e8a5eab26c5",
-      "requires": ["nodejs", "npm", "python3", "uv"],
+      "requires": [
+        "nodejs",
+        "npm",
+        "python3",
+        "uv"
+      ],
       "network": "host"
     },
     {
@@ -31,8 +36,30 @@
         "plugin": "opencode-swarm"
       },
       "sha256": "8a14373bc7286f3bb37a6fc685947d0c83af49c06278c78c765257f1c0e213b7",
-      "requires": ["nodejs", "npm"],
+      "requires": [
+        "nodejs",
+        "npm"
+      ],
       "network": "bridge"
+    },
+    {
+      "name": "autonomous",
+      "version": "0.1.0",
+      "description": "Autonomous execution profile — GSD-Core + Graphify + curated superpowers skills (debug, verify, review). No fabric-mcp.",
+      "path": "profiles/autonomous/",
+      "author": "opencode-pod",
+      "components": {
+        "skills": 4,
+        "gsd_core": "1.5.0",
+        "graphify": true
+      },
+      "sha256": "0cf4d236bc1218b82d6fe7bc4ff3841f543fbb7e4c58010198380ac32ab01f17",
+      "requires": [
+        "nodejs",
+        "npm",
+        "uv"
+      ],
+      "network": "host"
     }
   ]
 }

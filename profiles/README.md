@@ -72,6 +72,35 @@ integration.
 
 See `profiles/ralph/src/config/opencode.json` for the reference permission model.
 
+## Built-in profile: `swarm`
+
+The `swarm/` profile is a package-manager profile: it installs the
+`opencode-swarm` npm plugin (`npm install -g opencode-swarm` followed by
+`opencode-swarm install`) for verification-gated, architect-led multi-agent
+development — 18 agents, 30 commands, a gated QA pipeline, and built-in SAST.
+The tarball ships `src/config/opencode-swarm.json`, which is copied to
+`$HOME/.config/opencode/` after the plugin install. It includes agent model
+overrides and session tuning knobs (`session_mode`, `project_mode`,
+`max_parallel_coders`, `council`, `ui_review`, `mutation_testing`). Uses
+`network: bridge` — no host networking needed to reach external LLM APIs — and
+records `~/.swarm-version` for the idempotency guard.
+
+See `profiles/swarm/src/config/opencode-swarm.json` for the session
+configuration reference.
+
+## Built-in profile: `autonomous`
+
+The `autonomous/` profile is a lean execution profile for zero-interruption
+autonomous sessions: GSD-Core (pinned 1.5.0) with `tdd_mode` + curated
+superpowers skills (`systematic-debugging`, `verification-before-completion`,
+`requesting-code-review`, `self-consistency-reasoner`) injected via
+`agent_skills`, the Graphify CLI for codebase queries, and the review agents
+(`code-reviewer`, `red-team`). No fabric-mcp. Requires `network: host` to reach
+a local LLM (ollama/llama.cpp).
+
+See `profiles/autonomous/src/config/opencode.json` for the permission model and
+`profiles/autonomous/src/config/gsd-config.json` for the injected skill list.
+
 ## Versioning
 
 Each profile's version is declared in `profiles/index.json`. `build.sh` reads

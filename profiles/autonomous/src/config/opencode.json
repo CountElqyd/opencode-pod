@@ -1,0 +1,39 @@
+{
+  "$comment": "Container-adapted opencode config for the 'autonomous' profile. Differs from host config: no fabric-mcp MCP server, ollama provider reachable via network:host, permission model from opencode-podman-setup example/opencode.json.",
+  "model": "deepseek-v4-flash-free",
+  "provider": {
+    "deepseek-v4-flash-free": {
+      "npm": "@ai-sdk/deepseek",
+      "baseURL": "https://api.deepseek.com/v1"
+    },
+    "ollama": {
+      "npm": "@ai-sdk/openai-compatible",
+      "baseURL": "http://localhost:11434/v1"
+    }
+  },
+  "permissions": {
+    "read": {
+      "deny": [
+        "~/.local/share/opencode/auth.json",
+        "~/.ssh/*",
+        "~/.aws/*",
+        "*.pem",
+        "*.key",
+        ".env",
+        "/home/dev/.local/share/opencode/auth.json"
+      ]
+    },
+    "edit": {
+      "deny": [
+        "~/.ssh/*",
+        "~/.aws/*",
+        "*.pem",
+        "*.key",
+        "~/.local/share/opencode/auth.json"
+      ]
+    },
+    "bash": {
+      "deny": ["curl", "wget"]
+    }
+  }
+}
