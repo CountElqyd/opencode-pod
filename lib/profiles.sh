@@ -152,13 +152,31 @@ try:
         cur = tomllib.load(f)
 except Exception:
     cur = {}
-req = json.load(sys.stdin)
+try:
+    req = json.load(sys.stdin)
+except Exception:
+    print("Invalid toml requirements: malformed JSON", file=sys.stderr)
+    sys.exit(1)
+if not isinstance(req, dict):
+    print("Invalid toml requirements: expected an object", file=sys.stderr)
+    sys.exit(1)
+
+def norm(val):
+    if val is None:
+        return ""
+    if val is True:
+        return "true"
+    if val is False:
+        return "false"
+    return str(val)
+
 for section, sub in req.items():
     for k, v in sub.items():
-        curv = cur.get(section, {}).get(k)
-        curv_str = "" if curv is None else str(curv)
-        if curv != v:
-            print(f"{section}\t{k}\t{curv_str}\t{v}")
+        sec = cur.get(section)
+        curv = sec.get(k) if isinstance(sec, dict) else None
+        normv = norm(curv)
+        if normv != v:
+            print(f"{section}\t{k}\t{normv}\t{v}")
 ' <<< "$1"
 }
 

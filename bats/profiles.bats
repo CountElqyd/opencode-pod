@@ -597,10 +597,46 @@ _fake_resolve() {
   cd "$TESTDIR"
   printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
   local pyblock
-  pyblock="$(mktemp -d)"
+  pyblock="$TESTDIR/pyblock"
+  mkdir -p "$pyblock"
   printf 'import sys\nclass Blocker:\n    def find_spec(self, name, path=None, target=None):\n        if name == "tomllib":\n            raise ImportError("blocked for test")\n        return None\nsys.meta_path.insert(0, Blocker())\n' > "$pyblock/sitecustomize.py"
   PYTHONPATH="$pyblock" run _toml_deltas '{"network":{"mode":"host"}}'
-  rm -rf "$pyblock"
   [ "$status" -eq 0 ]
   [[ "$output" == *$'network\tmode\t\thost'* ]]
+}
+
+@test "_toml_deltas survives top-level scalar section collision" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf 'network = "host"\n' > opencode-pod.toml
+  run _toml_deltas '{"network":{"mode":"host"}}'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'network\tmode\t\thost'* ]]
+}
+
+@test "_toml_deltas normalizes boolean current value" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[env]\nDEBUG = true\n' > opencode-pod.toml
+  run _toml_deltas '{"env":{"DEBUG":"true"}}'
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "_toml_deltas normalizes integer current value" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[env]\nPORT = 8080\n' > opencode-pod.toml
+  run _toml_deltas '{"env":{"PORT":"8080"}}'
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "_toml_deltas reports delta when bool current differs from declared" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[env]\nDEBUG = true\n' > opencode-pod.toml
+  run _toml_deltas '{"env":{"DEBUG":"false"}}'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'env\tDEBUG\ttrue\tfalse'* ]]
 }
