@@ -591,3 +591,16 @@ _fake_resolve() {
   run _interactive
   [ "$status" -eq 0 ]
 }
+
+@test "_toml_deltas degrades when tomllib unavailable" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  local pyblock
+  pyblock="$(mktemp -d)"
+  printf 'import sys\nclass Blocker:\n    def find_spec(self, name, path=None, target=None):\n        if name == "tomllib":\n            raise ImportError("blocked for test")\n        return None\nsys.meta_path.insert(0, Blocker())\n' > "$pyblock/sitecustomize.py"
+  PYTHONPATH="$pyblock" run _toml_deltas '{"network":{"mode":"host"}}'
+  rm -rf "$pyblock"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'network\tmode\t\thost'* ]]
+}

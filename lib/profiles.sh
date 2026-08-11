@@ -145,8 +145,9 @@ _interactive() {
 # Usage: _toml_deltas <requirements_json>
 _toml_deltas() {
   python3 -c '
-import sys, json, tomllib
+import sys, json
 try:
+    import tomllib
     with open("opencode-pod.toml", "rb") as f:
         cur = tomllib.load(f)
 except Exception:
