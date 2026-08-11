@@ -291,4 +291,17 @@ data = json.load(open('$BATS_TEST_DIRNAME/../profiles/index.json'))
 p = [x for x in data['profiles'] if x['name'] == 'autonomous'][0]
 assert p['version'] == '0.2.1', p
 "
+  python3 -c "
+import hashlib, json, os, tarfile
+base = '$BATS_TEST_DIRNAME/../'
+index = json.load(open(os.path.join(base, 'profiles/index.json')))
+p = [x for x in index['profiles'] if x['name'] == 'autonomous'][0]
+tarball = os.path.join(base, 'profiles/autonomous/autonomous.tar.gz')
+with open(tarball, 'rb') as f:
+    actual = hashlib.sha256(f.read()).hexdigest()
+assert actual == p['sha256'], ('sha256 mismatch', actual, p['sha256'])
+with tarfile.open(tarball, 'r:gz') as tf:
+    version = tf.extractfile('VERSION').read().decode().strip()
+assert version == p['version'], ('VERSION mismatch', version, p['version'])
+"
 }
