@@ -89,17 +89,24 @@ grep -qs '\.local/bin' "$HOME/.zshenv" 2>/dev/null || {
 . "$HOME/.zshenv"
 
 # ---- Install Graphify CLI ----
-if command -v uv &>/dev/null; then
-  if command -v graphify &>/dev/null; then
-    echo "  Graphify: already installed ($(graphify --version 2>/dev/null || echo 'unknown'))"
-  else
+UV_BIN="$HOME/.local/bin/uv"
+if command -v graphify &>/dev/null; then
+  echo "  Graphify: already installed ($(graphify --version 2>/dev/null || echo 'unknown'))"
+else
+  if ! command -v uv &>/dev/null && [ ! -x "$UV_BIN" ]; then
+    echo "  Graphify: installing uv..."
+    mkdir -p "$HOME/.local/bin"
+    curl -LsSf https://github.com/astral-sh/uv/releases/latest/download/uv-x86_64-unknown-linux-gnu.tar.gz | tar xz -C "$HOME/.local/bin" --strip-components=1
+    export PATH="$HOME/.local/bin:$PATH"
+  fi
+  if command -v uv &>/dev/null; then
     echo "  Graphify: installing via uv..."
     uv tool install graphifyy || {
       echo "  Warning: graphifyy install failed" >&2
     }
+  else
+    echo "  Warning: uv not available, skipping graphify" >&2
   fi
-else
-  echo "  Warning: uv not found — graphify CLI not installed" >&2
 fi
 
 # ---- Install GSD-Core ----

@@ -3,7 +3,7 @@
   "description": "Autonomous execution profile — GSD-Core + Graphify + curated superpowers skills (debug, verify, review). No fabric-mcp.",
   "author": "opencode-pod",
   "components": {
-    "skills": 3,
+    "skills": 4,
     "gsd_core": "1.5.0",
     "graphify": true
   },
