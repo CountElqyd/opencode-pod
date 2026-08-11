@@ -434,3 +434,60 @@ _fake_resolve() {
   [[ "$saved" == *'"path":""'* ]]
   [[ "$saved" == *'"ralph"'* ]]
 }
+
+# --- Declared toml requirements ---
+
+@test "_declared_toml_requirements maps legacy network field to toml.network.mode" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _declared_toml_requirements '{"name":"x","network":"host"}'
+  [ "$status" -eq 0 ]
+  [ "$output" = '{"network": {"mode": "host"}}' ]
+}
+
+@test "_declared_toml_requirements toml block wins over legacy network" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _declared_toml_requirements '{"name":"x","network":"host","toml":{"network":{"mode":"bridge"}}}'
+  [ "$status" -eq 0 ]
+  [ "$output" = '{"network": {"mode": "bridge"}}' ]
+}
+
+@test "_declared_toml_requirements ignores empty legacy network" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _declared_toml_requirements '{"name":"x","network":""}'
+  [ "$status" -eq 0 ]
+  [ "$output" = '{}' ]
+}
+
+@test "_declared_toml_requirements empty when neither block present" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _declared_toml_requirements '{"name":"x"}'
+  [ "$status" -eq 0 ]
+  [ "$output" = '{}' ]
+}
+
+@test "_validate_toml_requirements accepts allowlisted scalar keys" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _validate_toml_requirements '{"network":{"mode":"host"},"env":{"FOO":"bar"}}'
+  [ "$status" -eq 0 ]
+}
+
+@test "_validate_toml_requirements rejects unknown section" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _validate_toml_requirements '{"bogus":{"x":"y"}}'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Unknown toml requirement section"* ]]
+}
+
+@test "_validate_toml_requirements rejects unknown key in known section" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _validate_toml_requirements '{"network":{"garbage":"x"}}'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Unknown toml requirement key"* ]]
+}
+
+@test "_validate_toml_requirements rejects array value (unsupported in v1)" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _validate_toml_requirements '{"mounts":{"extra":["/opt/foo"]}}'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"arrays"* ]]
+}

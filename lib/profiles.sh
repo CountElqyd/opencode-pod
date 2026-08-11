@@ -57,6 +57,57 @@ github_raw_url() {
   printf 'https://raw.githubusercontent.com/%s/%s' "$OPCODE_POD_REPO" "$OPCODE_POD_VERSION"
 }
 
+# --- Declarative toml requirements ---
+
+# Print the profile's declared toml requirements as JSON, merging the legacy
+# `network` field (alias for toml.network.mode) with the `toml` block.
+# The `toml` block wins if both are present. Empty legacy network is ignored.
+# Usage: _declared_toml_requirements <profile_json>
+_declared_toml_requirements() {
+  printf '%s\n' "$1" | python3 -c '
+import sys, json
+p = json.load(sys.stdin)
+req = dict(p.get("toml") or {})
+legacy = p.get("network")
+if legacy and "network" not in req:
+    req["network"] = {"mode": legacy}
+print(json.dumps(req))
+'
+}
+
+# Validate declared requirements against the v1 allowlist. Prints the (valid)
+# requirements JSON on stdout and returns 0, or an error to stderr and 1.
+# v1 allowlist is scalar-string values only; arrays are rejected.
+# Usage: _validate_toml_requirements <requirements_json>
+_validate_toml_requirements() {
+  printf '%s\n' "$1" | python3 -c '
+import sys, json
+ALLOW = {"network": {"mode"}, "mounts": {"extra"}, "container": {"packages"}}
+req = json.load(sys.stdin)
+for section, sub in req.items():
+    if section == "env":
+        for k, v in sub.items():
+            if not isinstance(v, str):
+                print(f"Unsupported value for toml key [env.{k}]: v1 supports scalar strings only", file=sys.stderr)
+                sys.exit(1)
+        continue
+    if section not in ALLOW:
+        print(f"Unknown toml requirement section: [{section}]", file=sys.stderr)
+        sys.exit(1)
+    for k, v in sub.items():
+        if k not in ALLOW[section]:
+            print(f"Unknown toml requirement key: [{section}.{k}]", file=sys.stderr)
+            sys.exit(1)
+        if isinstance(v, list):
+            print(f"Unsupported value for toml key [{section}.{k}]: arrays are not supported in v1", file=sys.stderr)
+            sys.exit(1)
+        if not isinstance(v, str):
+            print(f"Unsupported value for toml key [{section}.{k}]: v1 supports scalar strings only", file=sys.stderr)
+            sys.exit(1)
+print(json.dumps(req))
+'
+}
+
 _profile_registry_path() {
   local data_dir="${XDG_DATA_HOME:-$HOME/.local/share}"
   printf '%s/opencode-pod/profiles.json' "$data_dir"
