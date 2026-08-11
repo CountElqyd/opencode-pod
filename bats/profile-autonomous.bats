@@ -177,3 +177,11 @@ SCRIPT
   grep -q "No design doc found" "$dir/autocode.md"
   grep -q "gsd-autonomous" "$dir/autocode.md"
 }
+
+@test "autocode-runner forbids question and mandates decider dispatch" {
+  local runner="$BATS_TEST_DIRNAME/../profiles/autonomous/src/agents/autocode-runner.md"
+  [ -f "$runner" ]
+  grep -q 'NEVER call the .question. tool' "$runner"
+  grep -q "autocode-decider" "$runner"
+  grep -q "{choice, rationale}" "$runner"
+}
