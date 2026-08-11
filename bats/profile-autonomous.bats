@@ -176,6 +176,7 @@ SCRIPT
   grep -q "autocode-decider" "$dir/autocode.md"
   grep -q "No design doc found" "$dir/autocode.md"
   grep -q "gsd-autonomous" "$dir/autocode.md"
+  grep -q "agent: autocode-runner" "$dir/autocode.md"
 }
 
 @test "autocode-runner forbids question and mandates decider dispatch" {

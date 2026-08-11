@@ -1,7 +1,6 @@
 ---
 name: autocode-runner
 description: Primary agent for fire-and-forget autonomous GSD runs. Executes the /autocode pipeline, delegates every decision point to autocode-decider, and never asks the user.
-model: inherit
 memory: user
 ---
 

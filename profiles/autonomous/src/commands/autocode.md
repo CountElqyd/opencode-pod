@@ -3,6 +3,7 @@ description: Launch a fire-and-forget autonomous GSD run in-session from a gstac
 argument-hint: "[design-doc] [--from N] [--to N] [--only N] [--watch] [--timeout 4h] [--prepare-only] [--skip-prepare]"
 effort: max
 requires: [phase, progress]
+agent: autocode-runner
 tools:
   read: true
   write: true
