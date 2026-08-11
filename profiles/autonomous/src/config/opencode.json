@@ -23,6 +23,7 @@
       "su *": "deny",
       "env": "deny",
       "printenv *": "deny",
+      "printenv": "deny",
       "rm -rf*": "deny",
       "rm -r*": "deny",
       "rm --recursive*": "deny",

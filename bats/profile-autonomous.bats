@@ -219,7 +219,7 @@ assert p.get('webfetch') == 'allow'
 assert p.get('websearch') == 'allow'
 bash = p['bash']
 assert bash['*'] == 'allow'
-for deny in ['curl *', 'wget *', 'sudo *', 'su *', 'env', 'printenv *',
+for deny in ['curl *', 'wget *', 'sudo *', 'su *', 'env', 'printenv *', 'printenv',
              'rm -rf*', 'rm -r*', 'rm --recursive*', 'git push*',
              'git push --force*', 'git push -f*', 'git remote add*',
              'git remote set-url*', 'git reset --hard*', 'git clean*',
