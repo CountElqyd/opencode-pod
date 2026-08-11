@@ -9,6 +9,7 @@ tools:
   bash: true
   glob: true
   grep: true
+  agent: true
 ---
 <objective>
 Run a fire-and-forget autonomous GSD run in the current opencode session. The input is a gstack-reviewed design doc (already approved — do NOT run gstack review). Execute GSD's `/gsd-autonomous` against it, resolving every decision point through `autocode-decider` instead of asking the user. NEVER call the `question` tool. Stop only when the milestone lifecycle completes, the timeout fires, or a hard blocker cannot be resolved by policy.
