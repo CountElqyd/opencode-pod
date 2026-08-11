@@ -257,3 +257,21 @@ assert cfg['compaction'] == {'auto': True, 'reserved': 10000}
 print('ok')
 PY
 }
+
+@test "gsd-config.json retains pre-seed alignment keys" {
+  local cfg="$BATS_TEST_DIRNAME/../profiles/autonomous/src/config/gsd-config.json"
+  [ -f "$cfg" ]
+  cfg="$cfg" python3 - <<'PY'
+import json, os
+cfg = json.load(open(os.environ['cfg']))
+w = cfg['workflow']
+assert w['tdd_mode'] is True
+assert w['use_worktrees'] is False
+assert w['code_review'] is True
+assert w['quality_gates']['enabled'] is False
+assert cfg['graphify']['auto_update'] is True
+assert 'gsd-executor' in cfg['agent_skills']
+assert 'skip_discuss' not in cfg.get('workflow', {})
+print('ok')
+PY
+}
