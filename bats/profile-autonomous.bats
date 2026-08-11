@@ -276,3 +276,19 @@ assert 'skip_discuss' not in cfg.get('workflow', {})
 print('ok')
 PY
 }
+
+@test "autonomous profile declares host networking via toml block" {
+  local meta="$BATS_TEST_DIRNAME/../profiles/autonomous/profile.json"
+  python3 -c "
+import json
+m = json.load(open('$meta'))
+assert m['toml']['network']['mode'] == 'host', m
+assert m.get('network') == 'host', m
+"
+  python3 -c "
+import json
+data = json.load(open('$BATS_TEST_DIRNAME/../profiles/index.json'))
+p = [x for x in data['profiles'] if x['name'] == 'autonomous'][0]
+assert p['version'] == '0.2.1', p
+"
+}

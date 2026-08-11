@@ -8,5 +8,10 @@
     "graphify": true
   },
   "requires": ["nodejs", "npm", "uv"],
-  "network": "host"
+  "network": "host",
+  "toml": {
+    "network": {
+      "mode": "host"
+    }
+  }
 }
