@@ -336,13 +336,24 @@ EOF
 
   if ! is_bootstrap_step_done "$progress" "opencode_installed"; then
     printf '%s\n' "Installing opencode..."
-    local opcode_version="${SCRIPT_VERSION:-latest}"
+    local opcode_version="${OPENCODE_VERSION:-latest}"
     if podman exec -u "${container_user}" "$CONTAINER_NAME" bash -c "
       export NVM_DIR=\"\$HOME/.nvm\" &&
       [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\" &&
       npm install -g opencode-ai@${opcode_version}
     "; then
-      mark_bootstrap_step "$progress" "opencode_installed"
+      if podman exec -u "${container_user}" "$CONTAINER_NAME" bash -c "
+        export NVM_DIR=\"\$HOME/.nvm\" &&
+        [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\" &&
+        opencode --version
+      "; then
+        mark_bootstrap_step "$progress" "opencode_installed"
+      else
+        printf 'ERROR: opencode-ai@%s failed its smoke test (opencode --version crashed).\n' "$opcode_version" >&2
+        printf '  The pinned npm binary is broken. Run "npm view opencode-ai versions" on the host,\n' >&2
+        printf '  pick a working version, and bump OPENCODE_VERSION in opencode-pod.\n' >&2
+        completed_all=false
+      fi
     else
       printf '%s\n' "Failed to install opencode. Check network access." >&2
       completed_all=false

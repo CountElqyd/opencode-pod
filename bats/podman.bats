@@ -499,6 +499,42 @@ EOF
   [[ "$output" == *"opencode"* ]]
 }
 
+@test "bootstrap fails when installed opencode fails smoke test" {
+  mkdir -p "$TESTDIR/project"
+  cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
+[container]
+image = "wolfi-base"
+packages = ["git"]
+EOF
+
+  source lib/toml.sh
+  source lib/podman.sh
+  resolve_project "$TESTDIR/project"
+
+  podman() {
+    case "$1" in
+      start) return 0 ;;
+      exec)
+        if [[ "$*" == *"id dev"* ]]; then return 0; fi
+        if [[ "$*" == *"ssh-keygen"* ]]; then return 0; fi
+        if [[ "$*" == *"apk info"* ]]; then return 0; fi
+        if [[ "$*" == *"npm install"* ]]; then return 0; fi
+        if [[ "$*" == *"opencode --version"* ]]; then return 1; fi
+        return 0
+        ;;
+      cp) return 0 ;;
+    esac
+    return 0
+  }
+  export -f podman
+
+  run run_bootstrap
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Bootstrap incomplete"* ]]
+  [[ "$output" == *"smoke"* ]]
+  [[ "$output" == *"OPENCODE_VERSION"* ]]
+}
+
 @test "bootstrap installs nvm and LTS node for dev user" {
   mkdir -p "$TESTDIR/project"
   cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
