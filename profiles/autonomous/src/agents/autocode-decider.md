@@ -1,6 +1,7 @@
 ---
 name: autocode-decider
 description: Read-only policy engine. Given a GSD decision point (phase, decision type, options, recommendations), returns {choice, rationale}. Never writes files or runs commands — the runner applies your verdict.
+mode: subagent
 model: inherit
 memory: user
 permission:
