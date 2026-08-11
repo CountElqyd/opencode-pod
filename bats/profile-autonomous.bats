@@ -185,3 +185,21 @@ SCRIPT
   grep -q "autocode-decider" "$runner"
   grep -q "{choice, rationale}" "$runner"
 }
+
+@test "autocode-decider policy table covers all decision types" {
+  local decider="$BATS_TEST_DIRNAME/../profiles/autonomous/src/agents/autocode-decider.md"
+  [ -f "$decider" ]
+  grep -q "grey areas" "$decider"
+  grep -q "accept recommended answers" "$decider"
+  grep -q "blocker" "$decider"
+  grep -q "retry once" "$decider"
+  grep -q "skip the phase" "$decider"
+  grep -q "human_needed verification" "$decider"
+  grep -q "validation deferred" "$decider"
+  grep -q "gaps found" "$decider"
+  grep -q "gap closure once" "$decider"
+  grep -q "audit gaps" "$decider"
+  grep -q "tech debt" "$decider"
+  grep -q "cleanup confirmation" "$decider"
+  grep -q "approve" "$decider"
+}
