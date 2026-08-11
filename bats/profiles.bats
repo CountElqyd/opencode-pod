@@ -491,3 +491,41 @@ _fake_resolve() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"arrays"* ]]
 }
+
+@test "_validate_toml_requirements rejects non-object section value" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _validate_toml_requirements '{"network":"host"}'
+  [ "$status" -eq 1 ]
+}
+
+@test "_validate_toml_requirements rejects non-string env value" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _validate_toml_requirements '{"env":{"FOO":1}}'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"scalar strings"* ]]
+}
+
+@test "_validate_toml_requirements rejects malformed JSON" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _validate_toml_requirements 'not-json'
+  [ "$status" -eq 1 ]
+}
+
+@test "_validate_toml_requirements echoes valid requirements" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _validate_toml_requirements '{"network":{"mode":"host"}}'
+  [ "$status" -eq 0 ]
+  [ "$output" = '{"network": {"mode": "host"}}' ]
+}
+
+@test "_declared_toml_requirements rejects non-object toml block" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _declared_toml_requirements '{"name":"x","toml":"host"}'
+  [ "$status" -eq 1 ]
+}
+
+@test "_declared_toml_requirements rejects malformed JSON" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _declared_toml_requirements 'not-json'
+  [ "$status" -eq 1 ]
+}

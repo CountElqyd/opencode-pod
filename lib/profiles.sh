@@ -66,9 +66,23 @@ github_raw_url() {
 _declared_toml_requirements() {
   printf '%s\n' "$1" | python3 -c '
 import sys, json
-p = json.load(sys.stdin)
-req = dict(p.get("toml") or {})
+try:
+    p = json.load(sys.stdin)
+except json.JSONDecodeError:
+    print("Invalid profile json: expected a JSON object", file=sys.stderr)
+    sys.exit(1)
+if not isinstance(p, dict):
+    print("Invalid profile json: expected an object", file=sys.stderr)
+    sys.exit(1)
+toml_block = p.get("toml")
+if toml_block is not None and not isinstance(toml_block, dict):
+    print("Invalid profile toml block: expected an object", file=sys.stderr)
+    sys.exit(1)
+req = dict(toml_block or {})
 legacy = p.get("network")
+if legacy and not isinstance(legacy, str):
+    print("Invalid profile network field: expected a string", file=sys.stderr)
+    sys.exit(1)
 if legacy and "network" not in req:
     req["network"] = {"mode": legacy}
 print(json.dumps(req))
@@ -83,8 +97,18 @@ _validate_toml_requirements() {
   printf '%s\n' "$1" | python3 -c '
 import sys, json
 ALLOW = {"network": {"mode"}, "mounts": {"extra"}, "container": {"packages"}}
-req = json.load(sys.stdin)
+try:
+    req = json.load(sys.stdin)
+except json.JSONDecodeError:
+    print("Invalid requirements json: expected a JSON object", file=sys.stderr)
+    sys.exit(1)
+if not isinstance(req, dict):
+    print("Invalid requirements json: expected an object", file=sys.stderr)
+    sys.exit(1)
 for section, sub in req.items():
+    if not isinstance(sub, dict):
+        print(f"Invalid toml requirement section: [{section}] expected an object", file=sys.stderr)
+        sys.exit(1)
     if section == "env":
         for k, v in sub.items():
             if not isinstance(v, str):
