@@ -132,6 +132,35 @@ print(json.dumps(req))
 '
 }
 
+# Returns 0 if stdin is a terminal. Test hook — override in bats.
+_interactive() {
+  [[ -t 0 ]]
+}
+
+# Print tab-separated delta lines for declared requirements that differ from
+# the current opencode-pod.toml: "section<TAB>key<TAB>current<TAB>declared".
+# Missing current values print as empty. If tomllib is unavailable or the toml
+# is unparsable, every declared key is reported as differing (documented
+# degradation — the caller's prompt/apply path still works).
+# Usage: _toml_deltas <requirements_json>
+_toml_deltas() {
+  python3 -c '
+import sys, json, tomllib
+try:
+    with open("opencode-pod.toml", "rb") as f:
+        cur = tomllib.load(f)
+except Exception:
+    cur = {}
+req = json.load(sys.stdin)
+for section, sub in req.items():
+    for k, v in sub.items():
+        curv = cur.get(section, {}).get(k)
+        curv_str = "" if curv is None else str(curv)
+        if curv != v:
+            print(f"{section}\t{k}\t{curv_str}\t{v}")
+' <<< "$1"
+}
+
 _profile_registry_path() {
   local data_dir="${XDG_DATA_HOME:-$HOME/.local/share}"
   printf '%s/opencode-pod/profiles.json' "$data_dir"

@@ -538,3 +538,56 @@ _fake_resolve() {
   [[ "$output" != *"Traceback"* ]]
   [[ "$output" == *"expected a JSON object"* ]]
 }
+
+# --- toml diff + interactivity ---
+
+@test "_toml_deltas reports changed scalar" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  run _toml_deltas '{"network":{"mode":"host"}}'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'network\tmode\tbridge\thost'* ]]
+}
+
+@test "_toml_deltas empty when values match" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  run _toml_deltas '{"network":{"mode":"bridge"}}'
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "_toml_deltas handles missing section and env keys" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[container]\nuser = "dev"\n' > opencode-pod.toml
+  run _toml_deltas '{"env":{"FOO":"bar"},"network":{"mode":"host"}}'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'env\tFOO\t\tbar'* ]]
+  [[ "$output" == *$'network\tmode\t\thost'* ]]
+}
+
+@test "_toml_deltas degrades to always-differ when toml unparsable" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf 'not [valid = toml\n' > opencode-pod.toml
+  run _toml_deltas '{"network":{"mode":"host"}}'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'network\tmode\t\thost'* ]]
+}
+
+@test "_interactive is false under bats (non-TTY)" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _interactive
+  [ "$status" -ne 0 ]
+}
+
+@test "_interactive is overridable (returns 0 when stubbed)" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  _interactive() { return 0; }
+  export -f _interactive
+  run _interactive
+  [ "$status" -eq 0 ]
+}
