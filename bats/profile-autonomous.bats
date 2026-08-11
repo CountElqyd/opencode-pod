@@ -203,3 +203,57 @@ SCRIPT
   grep -q "cleanup confirmation" "$decider"
   grep -q "approve" "$decider"
 }
+
+@test "opencode.json is valid JSON with modern permission schema" {
+  local cfg="$BATS_TEST_DIRNAME/../profiles/autonomous/src/config/opencode.json"
+  [ -f "$cfg" ]
+  cfg="$cfg" python3 - <<'PY'
+import json, os
+cfg = json.load(open(os.environ['cfg']))
+assert 'permission' in cfg, 'modern singular permission key required'
+assert 'permissions' not in cfg, 'legacy plural permissions key must be removed'
+p = cfg['permission']
+assert p.get('external_directory') == {'*': 'allow'}
+assert p.get('doom_loop') == 'allow'
+assert p.get('webfetch') == 'allow'
+assert p.get('websearch') == 'allow'
+bash = p['bash']
+assert bash['*'] == 'allow'
+for deny in ['curl *', 'wget *', 'sudo *', 'su *', 'env', 'printenv *',
+             'rm -rf*', 'rm -r*', 'rm --recursive*', 'git push*',
+             'git push --force*', 'git push -f*', 'git remote add*',
+             'git remote set-url*', 'git reset --hard*', 'git clean*',
+             'git config alias*', 'npm publish*', 'pip install --system*',
+             'pip3 install --system*', 'chmod 777 *', 'apk *', 'apt *',
+             'apt-get *', 'brew *', 'yum *', 'dnf *', 'pacman *',
+             'shred *', 'dd *', 'mkfs*']:
+    assert bash.get(deny) == 'deny', f"bash deny missing: {deny}"
+edit = p['edit']
+assert edit['*'] == 'allow'
+for deny in ['~/.ssh/**', '~/.aws/**', '~/.gnupg/**',
+             '~/.config/opencode/opencode.json*',
+             '~/.local/share/opencode/auth.json', '/etc/**', '/usr/**',
+             '/bin/**', '/sbin/**', '/boot/**', '/sys/**', '/proc/**',
+             '/dev/**', '*id_rsa*', '*.pem', '*.key']:
+    assert edit.get(deny) == 'deny', f"edit deny missing: {deny}"
+read = p['read']
+assert read['*'] == 'allow'
+for deny in ['*.env', '*.env.*', '~/.ssh/**', '~/.aws/**', '~/.gnupg/**',
+             '~/.config/opencode/opencode.json*',
+             '~/.local/share/opencode/auth.json', '*id_rsa*',
+             '*.pem', '*.key', '/etc/shadow*', '/etc/passwd*']:
+    assert read.get(deny) == 'deny', f"read deny missing: {deny}"
+assert read.get('*.env.example') == 'allow'
+agent = cfg['agent']
+runner = agent['autocode-runner']
+assert runner['mode'] == 'primary'
+assert runner['steps'] == 150
+assert runner['permission']['question'] == 'deny'
+decider = agent['autocode-decider']
+assert decider['mode'] == 'subagent'
+assert decider['permission'].get('edit') == 'deny'
+assert decider['permission'].get('bash') == 'deny'
+assert cfg['compaction'] == {'auto': True, 'reserved': 10000}
+print('ok')
+PY
+}

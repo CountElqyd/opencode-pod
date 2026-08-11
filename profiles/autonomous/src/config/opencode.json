@@ -1,5 +1,6 @@
 {
-  "$comment": "Container-adapted opencode config for the 'autonomous' profile. Differs from host config: no fabric-mcp MCP server, ollama provider reachable via network:host, permission model from opencode-podman-setup example/opencode.json.",
+  "$schema": "https://opencode.ai/config.json",
+  "$comment": "Hardened container-adapted opencode config for the 'autonomous' profile. No fabric-mcp; ollama provider reachable via network:host. Modern permission object schema (pattern -> action).",
   "model": "deepseek-v4-flash-free",
   "provider": {
     "deepseek-v4-flash-free": {
@@ -11,29 +12,104 @@
       "baseURL": "http://localhost:11434/v1"
     }
   },
-  "permissions": {
-    "read": {
-      "deny": [
-        "~/.local/share/opencode/auth.json",
-        "~/.ssh/*",
-        "~/.aws/*",
-        "*.pem",
-        "*.key",
-        ".env",
-        "/home/dev/.local/share/opencode/auth.json"
-      ]
+  "permission": {
+    "external_directory": { "*": "allow" },
+    "doom_loop": "allow",
+    "bash": {
+      "*": "allow",
+      "curl *": "deny",
+      "wget *": "deny",
+      "sudo *": "deny",
+      "su *": "deny",
+      "env": "deny",
+      "printenv *": "deny",
+      "rm -rf*": "deny",
+      "rm -r*": "deny",
+      "rm --recursive*": "deny",
+      "git push*": "deny",
+      "git push --force*": "deny",
+      "git push -f*": "deny",
+      "git remote add*": "deny",
+      "git remote set-url*": "deny",
+      "git reset --hard*": "deny",
+      "git clean*": "deny",
+      "git config alias*": "deny",
+      "npm publish*": "deny",
+      "pip install --system*": "deny",
+      "pip3 install --system*": "deny",
+      "chmod 777 *": "deny",
+      "apk *": "deny",
+      "apt *": "deny",
+      "apt-get *": "deny",
+      "brew *": "deny",
+      "yum *": "deny",
+      "dnf *": "deny",
+      "pacman *": "deny",
+      "shred *": "deny",
+      "dd *": "deny",
+      "mkfs*": "deny"
     },
     "edit": {
-      "deny": [
-        "~/.ssh/*",
-        "~/.aws/*",
-        "*.pem",
-        "*.key",
-        "~/.local/share/opencode/auth.json"
-      ]
+      "*": "allow",
+      "~/.ssh/**": "deny",
+      "~/.aws/**": "deny",
+      "~/.gnupg/**": "deny",
+      "~/.config/opencode/opencode.json*": "deny",
+      "~/.local/share/opencode/auth.json": "deny",
+      "/etc/**": "deny",
+      "/usr/**": "deny",
+      "/bin/**": "deny",
+      "/sbin/**": "deny",
+      "/boot/**": "deny",
+      "/sys/**": "deny",
+      "/proc/**": "deny",
+      "/dev/**": "deny",
+      "*id_rsa*": "deny",
+      "*.pem": "deny",
+      "*.key": "deny"
     },
-    "bash": {
-      "deny": ["curl", "wget"]
+    "read": {
+      "*": "allow",
+      "*.env": "deny",
+      "*.env.*": "deny",
+      "*.env.example": "allow",
+      "~/.ssh/**": "deny",
+      "~/.aws/**": "deny",
+      "~/.gnupg/**": "deny",
+      "~/.config/opencode/opencode.json*": "deny",
+      "~/.local/share/opencode/auth.json": "deny",
+      "*id_rsa*": "deny",
+      "*.pem": "deny",
+      "*.key": "deny",
+      "/etc/shadow*": "deny",
+      "/etc/passwd*": "deny"
+    },
+    "webfetch": "allow",
+    "websearch": "allow",
+    "task": { "*": "allow" }
+  },
+  "compaction": {
+    "auto": true,
+    "reserved": 10000
+  },
+  "agent": {
+    "autocode-runner": {
+      "description": "Primary agent for fire-and-forget autonomous GSD runs.",
+      "mode": "primary",
+      "steps": 150,
+      "permission": {
+        "question": "deny"
+      }
+    },
+    "autocode-decider": {
+      "description": "Read-only policy engine returning {choice, rationale} for GSD decision points.",
+      "mode": "subagent",
+      "permission": {
+        "edit": "deny",
+        "write": "deny",
+        "bash": "deny",
+        "question": "deny"
+      }
     }
   }
 }
