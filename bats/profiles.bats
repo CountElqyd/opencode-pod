@@ -640,3 +640,48 @@ _fake_resolve() {
   [ "$status" -eq 0 ]
   [[ "$output" == *$'env\tDEBUG\ttrue\tfalse'* ]]
 }
+
+# --- toml line patcher ---
+
+@test "_toml_set updates existing key preserving comments and siblings" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '# top comment\n[network]\n# mode comment\nmode = "bridge"\nforward = []\n' > test.toml
+  run _toml_set test.toml network mode host
+  [ "$status" -eq 0 ]
+  grep -q 'mode = "host"' test.toml
+  grep -q '# top comment' test.toml
+  grep -q '# mode comment' test.toml
+  grep -q 'forward = \[\]' test.toml
+}
+
+@test "_toml_set adds key to existing section" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network]\nforward = []\n' > test.toml
+  run _toml_set test.toml network mode host
+  [ "$status" -eq 0 ]
+  grep -q 'mode = "host"' test.toml
+  grep -q 'forward = \[\]' test.toml
+}
+
+@test "_toml_set adds missing section at end" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[container]\nuser = "dev"\n' > test.toml
+  run _toml_set test.toml network mode host
+  [ "$status" -eq 0 ]
+  grep -q '\[network\]' test.toml
+  grep -q 'mode = "host"' test.toml
+  grep -q 'user = "dev"' test.toml
+}
+
+@test "_toml_set does not touch other sections when adding" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[security]\nharden = true\n' > test.toml
+  run _toml_set test.toml network mode host
+  [ "$status" -eq 0 ]
+  grep -q 'harden = true' test.toml
+  grep -q '\[network\]' test.toml
+}

@@ -180,6 +180,41 @@ for section, sub in req.items():
 ' <<< "$1"
 }
 
+# Set a scalar key within a toml section, preserving comments and sibling
+# lines. Adds the key to an existing section, or appends a new section.
+# v1: writes double-quoted string values only.
+# Usage: _toml_set <toml_file> <section> <key> <value>
+_toml_set() {
+  local file="$1" section="$2" key="$3" value="$4"
+  [[ -f "$file" ]] || : > "$file"
+  local tmp
+  tmp="$(mktemp)"
+  local in_section=false found_section=false wrote=false
+  while IFS= read -r line; do
+    if [[ "$line" =~ ^\[([^\]]+)\]$ ]]; then
+      if [[ "${BASH_REMATCH[1]}" == "$section" ]]; then
+        in_section=true
+        found_section=true
+      else
+        in_section=false
+      fi
+    fi
+    if $in_section && [[ "$line" =~ ^${key}[[:space:]]*= ]]; then
+      printf '%s = "%s"\n' "$key" "$value" >> "$tmp"
+      wrote=true
+      continue
+    fi
+    printf '%s\n' "$line" >> "$tmp"
+  done < "$file"
+  if ! $wrote; then
+    if ! $found_section; then
+      printf '\n[%s]\n' "$section" >> "$tmp"
+    fi
+    printf '%s = "%s"\n' "$key" "$value" >> "$tmp"
+  fi
+  mv "$tmp" "$file"
+}
+
 _profile_registry_path() {
   local data_dir="${XDG_DATA_HOME:-$HOME/.local/share}"
   printf '%s/opencode-pod/profiles.json' "$data_dir"
