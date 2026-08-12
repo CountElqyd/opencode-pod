@@ -186,20 +186,33 @@ for section, sub in req.items():
 # Usage: _toml_set <toml_file> <section> <key> <value>
 _toml_set() {
   local file="$1" section="$2" key="$3" value="$4"
+  if [[ -L "$file" ]]; then
+    file="$(readlink -f "$file")"
+  fi
   [[ -f "$file" ]] || : > "$file"
   local tmp
-  tmp="$(mktemp)"
+  tmp="$(mktemp "${file}.XXXXXX")"
+  # shellcheck disable=SC2064
+  if [[ -n "${BASH_VERSION:-}" ]]; then
+    trap 'rm -f "$tmp"' RETURN
+  fi
+  local value_esc key_esc
+  value_esc="${value//\\/\\\\}"
+  value_esc="${value_esc//\"/\\\"}"
+  key_esc="$(printf '%s\n' "$key" | awk '{ gsub(/[][\\^$.*?+(){|}]/, "\\\\&"); print }')"
   local in_section=false found_section=false wrote=false pending=false
-  local sec_pat key_pat
-  sec_pat='^\[[^]]+\]$'
-  key_pat="^${key}[[:space:]]*="
+  local sec_pat key_pat hdr
+  sec_pat='^\[[^]]+\][[:space:]]*(#.*)?$'
+  key_pat="^${key_esc}[[:space:]]*="
   while IFS= read -r line; do
     if [[ "$line" =~ $sec_pat ]]; then
       if $pending; then
-        printf '%s = "%s"\n' "$key" "$value" >> "$tmp"
+        printf '%s = "%s"\n' "$key" "$value_esc" >> "$tmp"
         pending=false
       fi
-      local hdr="${line:1:${#line}-2}"
+      hdr="$(printf '%s\n' "$line" | sed -n 's/^\[\([^]]*\)\].*/\1/p')"
+      hdr="${hdr#"${hdr%%[![:space:]]*}"}"
+      hdr="${hdr%"${hdr##*[![:space:]]}"}"
       if [[ "$hdr" == "$section" ]]; then
         in_section=true
         found_section=true
@@ -208,7 +221,7 @@ _toml_set() {
       fi
     fi
     if $in_section && [[ "$line" =~ $key_pat ]]; then
-      printf '%s = "%s"\n' "$key" "$value" >> "$tmp"
+      printf '%s = "%s"\n' "$key" "$value_esc" >> "$tmp"
       wrote=true
       pending=false
       continue
@@ -221,10 +234,13 @@ _toml_set() {
   if ! $wrote; then
     if ! $found_section; then
       printf '\n[%s]\n' "$section" >> "$tmp"
-      printf '%s = "%s"\n' "$key" "$value" >> "$tmp"
+      printf '%s = "%s"\n' "$key" "$value_esc" >> "$tmp"
     elif $pending; then
-      printf '%s = "%s"\n' "$key" "$value" >> "$tmp"
+      printf '%s = "%s"\n' "$key" "$value_esc" >> "$tmp"
     fi
+  fi
+  if [[ -f "$file" ]]; then
+    chmod --reference="$file" "$tmp"
   fi
   mv "$tmp" "$file"
 }

@@ -707,3 +707,48 @@ _fake_resolve() {
   grep -q 'user = "dev"' test.toml
   python3 -c 'import tomllib; tomllib.load(open("test.toml", "rb"))'
 }
+
+@test "_toml_set escapes env key regex metacharacters" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[env]\nAOB = "keepme"\n' > test.toml
+  run _toml_set test.toml env 'A.B' 'x'
+  [ "$status" -eq 0 ]
+  grep -q 'AOB = "keepme"' test.toml
+  grep -q 'A.B = "x"' test.toml
+  python3 -c 'import tomllib; tomllib.load(open("test.toml", "rb"))'
+}
+
+@test "_toml_set matches section header with trailing whitespace" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network]  \nmode = "bridge"\n' > test.toml
+  run _toml_set test.toml network mode host
+  [ "$status" -eq 0 ]
+  [ "$(grep -c '^\[network\]' test.toml)" -eq 1 ]
+  grep -q 'mode = "host"' test.toml
+  python3 -c 'import tomllib; tomllib.load(open("test.toml", "rb"))'
+}
+
+@test "_toml_set matches section header with trailing comment" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network] # net section\nmode = "bridge"\n' > test.toml
+  run _toml_set test.toml network mode host
+  [ "$status" -eq 0 ]
+  [ "$(grep -c '^\[network\]' test.toml)" -eq 1 ]
+  grep -q 'mode = "host"' test.toml
+  grep -q '# net section' test.toml
+  python3 -c 'import tomllib; tomllib.load(open("test.toml", "rb"))'
+}
+
+@test "_toml_set escapes quotes and backslashes in value" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[env]\nA = "old"\n' > test.toml
+  run _toml_set test.toml env A 'a"b\c'
+  [ "$status" -eq 0 ]
+  local parsed
+  parsed="$(python3 -c 'import tomllib; print(tomllib.load(open("test.toml","rb"))["env"]["A"])')"
+  [ "$parsed" = 'a"b\c' ]
+}
