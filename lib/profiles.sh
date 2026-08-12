@@ -295,6 +295,12 @@ _apply_toml_requirements() {
     _toml_set "opencode-pod.toml" "$section" "$key" "$newval"
   done <<< "$deltas"
 
+  # Re-parse the config so container creation uses the newly written values.
+  # mtime-cached parse_toml refreshes CONFIG_* on the updated file.
+  if declare -f parse_toml >/dev/null 2>&1; then
+    parse_toml "opencode-pod.toml" >/dev/null 2>&1 || true
+  fi
+
   printf '  Destroying container...\n'
   container_destroy || true
   CONTAINER_STATE="nonexistent"

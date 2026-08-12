@@ -925,6 +925,24 @@ _fake_resolve() {
   [ ! -f "$TESTDIR/flow" ]
 }
 
+@test "_apply_toml_requirements recreates with fresh CONFIG_NETWORK_MODE after apply" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  _interactive() { return 0; }
+  read() { RESPONSE="y"; }
+  container_destroy() { :; }
+  container_setup() { printf 'setup CONFIG_NETWORK_MODE=%s\n' "${CONFIG_NETWORK_MODE:-}" >> "$TESTDIR/flow"; }
+  podman() { return 0; }
+  parse_toml() {
+    CONFIG_NETWORK_MODE="$(python3 -c 'import tomllib; print(tomllib.load(open("opencode-pod.toml","rb")).get("network",{}).get("mode",""))')"
+  }
+  export -f _interactive read container_destroy container_setup podman parse_toml
+  run _apply_toml_requirements '{"network":"host"}'
+  [ "$status" -eq 2 ]
+  grep -q 'setup CONFIG_NETWORK_MODE=host' "$TESTDIR/flow"
+}
+
 @test "_apply_toml_requirements rejects invalid block before prompting" {
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
   cd "$TESTDIR"
