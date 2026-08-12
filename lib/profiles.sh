@@ -253,6 +253,7 @@ _toml_set() {
     chmod --reference="$file" "$tmp"
   fi
   mv "$tmp" "$file"
+  trap - RETURN
 }
 
 # Apply a profile's declared toml requirements to opencode-pod.toml.
@@ -557,8 +558,8 @@ for p in data.get('profiles', []):
   description=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("description",""))' 2>/dev/null || printf '')
   sha256_value=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("sha256",""))' 2>/dev/null || printf '')
 
-  _apply_toml_requirements "$profile_json"
-  local apply_rc=$?
+  local apply_rc=0
+  _apply_toml_requirements "$profile_json" || apply_rc=$?
   if [[ $apply_rc -eq 3 ]]; then
     printf 'Install cancelled.\n'
     exit 1
