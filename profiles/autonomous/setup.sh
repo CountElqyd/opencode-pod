@@ -79,6 +79,13 @@ if [ -d "$EXTRACTED/commands" ]; then
   echo "  Commands: installed"
 fi
 
+# ---- Copy plugins ----
+if [ -d "$EXTRACTED/plugins" ]; then
+  mkdir -p "$HOME/.config/opencode/plugins"
+  cp -r "$EXTRACTED/plugins/"* "$HOME/.config/opencode/plugins/" 2>/dev/null
+  echo "  Plugins: installed"
+fi
+
 # ---- Add ~/.local/bin to PATH ----
 grep -qs '\.local/bin' "$HOME/.zshenv" 2>/dev/null || {
   # shellcheck disable=SC2016
