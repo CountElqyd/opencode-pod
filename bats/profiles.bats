@@ -685,3 +685,13 @@ _fake_resolve() {
   grep -q 'harden = true' test.toml
   grep -q '\[network\]' test.toml
 }
+
+@test "_toml_set adds key to existing non-last section" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network]\nforward = []\n[volume]\nuser = "dev"\n' > test.toml
+  run _toml_set test.toml network mode host
+  [ "$status" -eq 0 ]
+  awk '/^\[/ {sec=$0} /^mode = / {print sec}' test.toml | grep -q '\[network\]'
+  grep -q 'user = "dev"' test.toml
+}

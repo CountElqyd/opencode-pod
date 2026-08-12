@@ -189,28 +189,41 @@ _toml_set() {
   [[ -f "$file" ]] || : > "$file"
   local tmp
   tmp="$(mktemp)"
-  local in_section=false found_section=false wrote=false
+  local in_section=false found_section=false wrote=false pending=false
+  local sec_pat key_pat
+  sec_pat='^\[[^]]+\]$'
+  key_pat="^${key}[[:space:]]*="
   while IFS= read -r line; do
-    if [[ "$line" =~ ^\[([^\]]+)\]$ ]]; then
-      if [[ "${BASH_REMATCH[1]}" == "$section" ]]; then
+    if [[ "$line" =~ $sec_pat ]]; then
+      if $pending; then
+        printf '%s = "%s"\n' "$key" "$value" >> "$tmp"
+        pending=false
+      fi
+      local hdr="${line:1:${#line}-2}"
+      if [[ "$hdr" == "$section" ]]; then
         in_section=true
         found_section=true
       else
         in_section=false
       fi
     fi
-    if $in_section && [[ "$line" =~ ^${key}[[:space:]]*= ]]; then
+    if $in_section && [[ "$line" =~ $key_pat ]]; then
       printf '%s = "%s"\n' "$key" "$value" >> "$tmp"
       wrote=true
       continue
     fi
     printf '%s\n' "$line" >> "$tmp"
+    if $in_section && ! $wrote; then
+      pending=true
+    fi
   done < "$file"
   if ! $wrote; then
     if ! $found_section; then
       printf '\n[%s]\n' "$section" >> "$tmp"
+      printf '%s = "%s"\n' "$key" "$value" >> "$tmp"
+    elif $pending; then
+      printf '%s = "%s"\n' "$key" "$value" >> "$tmp"
     fi
-    printf '%s = "%s"\n' "$key" "$value" >> "$tmp"
   fi
   mv "$tmp" "$file"
 }
