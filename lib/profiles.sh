@@ -546,54 +546,18 @@ for p in data.get('profiles', []):
     exit 1
   fi
 
-  local version network_mode description sha256_value
+  local version description sha256_value
   version=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("version","?"))' 2>/dev/null)
-  network_mode=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("network",""))' 2>/dev/null || printf '')
   description=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("description",""))' 2>/dev/null || printf '')
   sha256_value=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("sha256",""))' 2>/dev/null || printf '')
 
-  if [[ "$network_mode" == "host" ]]; then
-    if [[ ! -t 0 ]]; then
-      printf 'Error: Profile "%s" requires host networking but stdin is not a terminal.\n' "$name" >&2
-      printf 'Run interactively to confirm container recreation.\n' >&2
-      exit 1
+  _apply_toml_requirements "$profile_json" || {
+    local apply_rc=$?
+    if [[ $apply_rc -eq 3 ]]; then
+      printf 'Install cancelled.\n'
     fi
-
-    local current_network
-    current_network="$(podman container inspect -f '{{.HostConfig.NetworkMode}}' "$CONTAINER_NAME" 2>/dev/null || echo "nonexistent")"
-
-    if [[ "$current_network" != "host" ]]; then
-      printf 'Profile "%s" requires host networking (current: %s).\n' "$name" "$current_network"
-      printf 'The container must be destroyed and recreated. Continue? [y/N]: '
-      local response
-      read -r response
-      if [[ "$response" =~ ^[yY] ]]; then
-        if [[ -f "opencode-pod.toml" ]]; then
-          sed -i '/^\[network\]/,/^\[/{s/mode = ".*"/mode = "host"/}' "opencode-pod.toml"
-          # shellcheck disable=SC2034 # used in podman.sh:container_create
-          CONFIG_NETWORK_MODE="host"
-          printf '  Updated network mode to host in opencode-pod.toml.\n'
-        fi
-        printf '  Destroying container...\n'
-        container_destroy || true
-        CONTAINER_STATE="nonexistent"
-        printf '  Recreating container with host networking...\n'
-        container_setup || {
-          printf 'Error: Container recreate failed.\n' >&2
-          exit 1
-        }
-        podman start "$CONTAINER_NAME" || {
-          printf 'Error: Failed to start recreated container.\n' >&2
-          exit 1
-        }
-        sleep 1
-        CONTAINER_STATE="running"
-      else
-        printf 'Install cancelled.\n'
-        exit 1
-      fi
-    fi
-  fi
+    exit 1
+  }
 
   local tarball_url setup_url
   tarball_url="$(github_raw_url)/profiles/${name}/${name}.tar.gz"
@@ -691,11 +655,18 @@ for p in data.get('profiles', []):
     exit 1
   fi
 
-  local new_version new_network new_description new_sha256
+  local new_version new_description new_sha256
   new_version=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("version","?"))' 2>/dev/null)
-  new_network=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("network",""))' 2>/dev/null || printf '')
   new_description=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("description",""))' 2>/dev/null || printf '')
   new_sha256=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("sha256",""))' 2>/dev/null || printf '')
+
+  local apply_rc=0
+  _apply_toml_requirements "$profile_json" || apply_rc=$?
+  if [[ $apply_rc -eq 3 ]]; then
+    printf 'Warning: profile toml requirements not applied (declined).\n' >&2
+  elif [[ $apply_rc -ne 0 ]]; then
+    printf 'Warning: failed to apply profile toml requirements.\n' >&2
+  fi
 
   if [[ "$installed_version" == "$new_version" ]] && ! $force; then
     printf "Profile '%s' is already at v%s. Use --force to re-install.\n" "$name" "$new_version"
@@ -748,37 +719,6 @@ print(json.dumps(data, indent=2))
     printf 'Warning: Failed to update profile registry.\n' >&2
   else
     _save_registry "$updated_registry"
-  fi
-
-  if [[ -n "$new_network" && -t 0 ]]; then
-    local current_network
-    current_network=$(python3 -c '
-import sys, json
-try:
-    with open("opencode-pod.toml") as f:
-        for line in f:
-            line = line.strip()
-            if line == "[network]":
-                break
-        for line in f:
-            line = line.strip()
-            if line.startswith("mode"):
-                print(line.split("=", 1)[1].strip().strip("\"'\"'"))
-                break
-except Exception:
-    pass
-' 2>/dev/null || printf '')
-    if [[ -n "$current_network" && "$current_network" != "$new_network" ]]; then
-      local response
-      printf 'Network mode changed (%s → %s). Update opencode-pod.toml? [y/N]: ' "$current_network" "$new_network"
-      read -r response
-      if [[ "$response" =~ ^[yY] ]]; then
-        if [[ -f "opencode-pod.toml" ]]; then
-          sed -i '/^\[network\]/,/^\[/{s/mode = ".*"/mode = "'"$new_network"'"/}' "opencode-pod.toml"
-          printf 'Updated network mode to %s in opencode-pod.toml.\n' "$new_network"
-        fi
-      fi
-    fi
   fi
 
   printf "Profile '%s' updated to v%s.\n" "$name" "$new_version"

@@ -382,8 +382,116 @@ _fake_resolve() {
   [ ! -f "$TESTDIR/saved_registry" ]
 }
 
-@test "cmd_profile_update network mode prompt when mode changes" {
-  skip "Network mode prompt test requires interactive terminal simulation"
+@test "cmd_profile_update applies toml delta and recreates when mode changes" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  resolve_project() { _fake_resolve; }
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  _load_registry() { printf '{"format_version":1,"profiles":[{"name":"ralph","version":"0.2.0"}]}'; }
+  _save_registry() { :; }
+  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"0.3.0","description":"New","components":{},"toml":{"network":{"mode":"host"}}}]}'; }
+  _interactive() { return 0; }
+  read() { RESPONSE="y"; }
+  container_destroy() { printf 'destroy\n' >> "$TESTDIR/flow"; }
+  container_setup() { printf 'setup\n' >> "$TESTDIR/flow"; }
+  podman() {
+    if [[ "$*" == "start"* ]]; then printf 'start\n' >> "$TESTDIR/flow"; return 0; fi
+    printf '%s\n' "$*" > "$TESTDIR/podman_called"; return 0
+  }
+  python3() { command python3 "$@"; }
+  sha256sum() { printf 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  -\n'; }
+  curl() { touch "$TESTDIR/curl_called"; return 0; }
+  export -f resolve_project _load_registry _save_registry _fetch_index _interactive read container_destroy container_setup podman python3 sha256sum curl _fake_resolve
+  run cmd_profile_update "ralph"
+  [ "$status" -eq 0 ]
+  grep -q 'mode = "host"' opencode-pod.toml
+  local flow
+  flow="$(cat "$TESTDIR/flow")"
+  [[ "$flow" == *"destroy"* ]]
+  [[ "$flow" == *"setup"* ]]
+  [[ "$flow" == *"start"* ]]
+}
+
+@test "cmd_profile_update applies toml delta even when version unchanged" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  resolve_project() { _fake_resolve; }
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  _load_registry() { printf '{"format_version":1,"profiles":[{"name":"ralph","version":"0.3.0"}]}'; }
+  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"0.3.0","description":"New","components":{},"toml":{"network":{"mode":"host"}}}]}'; }
+  _interactive() { return 0; }
+  read() { RESPONSE="y"; }
+  container_destroy() { :; }
+  container_setup() { :; }
+  podman() {
+    if [[ "$*" == *"exec"* || "$*" == *"cp"* ]]; then printf '%s\n' "$*" > "$TESTDIR/podman_called"; return 0; fi
+    return 0
+  }
+  python3() { command python3 "$@"; }
+  export -f resolve_project _load_registry _fetch_index _interactive read container_destroy container_setup podman python3 _fake_resolve
+  run cmd_profile_update "ralph"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"already at"* ]]
+  grep -q 'mode = "host"' opencode-pod.toml
+  [ ! -f "$TESTDIR/podman_called" ]
+}
+
+@test "cmd_profile_update warns and proceeds when requirements declined" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  resolve_project() { _fake_resolve; }
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  _load_registry() { printf '{"format_version":1,"profiles":[{"name":"ralph","version":"0.2.0"}]}'; }
+  _save_registry() { :; }
+  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"0.3.0","description":"New","components":{},"toml":{"network":{"mode":"host"}}}]}'; }
+  _interactive() { return 0; }
+  read() { RESPONSE="n"; }
+  podman() { printf '%s\n' "$*" > "$TESTDIR/podman_called"; return 0; }
+  python3() { command python3 "$@"; }
+  sha256sum() { printf 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  -\n'; }
+  curl() { touch "$TESTDIR/curl_called"; return 0; }
+  export -f resolve_project _load_registry _save_registry _fetch_index _interactive read podman python3 sha256sum curl _fake_resolve
+  run cmd_profile_update "ralph"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"not applied"* ]]
+  grep -q 'mode = "bridge"' opencode-pod.toml
+}
+
+@test "cmd_profile_update non-TTY on delta warns and proceeds" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  resolve_project() { _fake_resolve; }
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  _load_registry() { printf '{"format_version":1,"profiles":[{"name":"ralph","version":"0.2.0"}]}'; }
+  _save_registry() { :; }
+  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"0.3.0","description":"New","components":{},"toml":{"network":{"mode":"host"}}}]}'; }
+  _interactive() { return 1; }
+  podman() { printf '%s\n' "$*" > "$TESTDIR/podman_called"; return 0; }
+  python3() { command python3 "$@"; }
+  sha256sum() { printf 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  -\n'; }
+  curl() { touch "$TESTDIR/curl_called"; return 0; }
+  export -f resolve_project _load_registry _save_registry _fetch_index _interactive podman python3 sha256sum curl _fake_resolve
+  run cmd_profile_update "ralph"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"failed to apply"* ]]
+  grep -q 'mode = "bridge"' opencode-pod.toml
+}
+
+@test "cmd_profile_install aborts when toml requirements declined" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  resolve_project() { _fake_resolve; }
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  _load_registry() { printf '{"format_version":1,"profiles":[]}'; }
+  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"1.0.0","description":"Test","components":{},"toml":{"network":{"mode":"host"}}}]}'; }
+  _interactive() { return 0; }
+  read() { RESPONSE="n"; }
+  python3() { command python3 "$@"; }
+  export -f resolve_project _load_registry _fetch_index _interactive read python3 _fake_resolve
+  run cmd_profile_install "ralph"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Install cancelled"* ]]
+  grep -q 'mode = "bridge"' opencode-pod.toml
 }
 
 # --- Helper tests ---
