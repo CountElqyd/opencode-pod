@@ -30,10 +30,13 @@
 12. **Task 5 install rc handling** — install treats rc=0 AND rc=2 (applied+recreated) as success; only rc=1 (hard error) and rc=3 (declined) abort. The plan's `|| { exit 1 }` form incorrectly aborted on rc=2.
 13. **Task 5 update recreate** — a recreate (rc=2) bypasses the "already at" shortcut and reinstalls the profile + re-saves registry, because `container_destroy` deletes the registry and home volume. `apply_rc -ne 2` guard on the version gate.
 14. **Task 5 set -euo pipefail safety** — `_toml_set` ends with `trap - RETURN` (RETURN trap re-fires on caller return with `$tmp` out of scope → `set -u` abort); install's apply call uses `|| apply_rc=$?` so rc=2 doesn't kill the shell under `set -e`.
+15. **C1 (whole-branch review)** — `run_bootstrap` in lib/podman.sh:233 armed `trap "rmdir ... " RETURN` with no `|| true`; the trap re-fires on the caller's return and rmdir's non-zero exit aborts the CLI under `set -e` — killing the recreate flow (container destroyed, left stopped, profile/registry never reinstalled). Fixed with `rmdir ... || true`.
+16. **I1 (whole-branch review)** — declared `env` keys were validated only for control chars; keys like `A.B`, `FOO"`, `FOO]` passed and, once written by `_toml_set`, broke the tool's own `parse_toml` reader (bricking every opencode-pod command). Validation now restricts env keys to `[A-Za-z_][A-Za-z0-9_]*` (bare identifiers, matching what parse_toml accepts).
+17. **I2 (whole-branch review)** — the config-refresh re-parse after `_toml_set` could serve a stale mtime-cached value for same-second writes. `parse_toml` gained a `force` arg (second positional) to bypass the cache; `_apply_toml_requirements` calls `parse_toml "opencode-pod.toml" force`.
 
 ### Verified behaviors
 
-- Full suite `bats bats/` = 200/200 passing (plan expected 147/148; the anticipated `bats/podman.bats` test-48 WIP failure does NOT exist at this commit).
+- Full suite `bats bats/` = 202/202 passing (plan expected 147/148; the anticipated `bats/podman.bats` test-48 WIP failure does NOT exist at this commit).
 - Production-style simulation (`set -euo pipefail` + sourced lib) for install/update apply/recreate/decline/non-TTY/no-delta paths — all exit codes correct.
 - zsh + bash parity verified for all new helpers.
 

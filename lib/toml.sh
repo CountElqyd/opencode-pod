@@ -7,6 +7,7 @@ CACHE_DIR="${CACHE_DIR:-${HOME}/.cache/opencode-pod}"
 
 parse_toml() {
   local config_file="$1"
+  local force="${2:-}"
 
   if [[ ! -f "$config_file" ]]; then
     echo "Error: config file not found: $config_file" >&2
@@ -25,7 +26,7 @@ parse_toml() {
   local mtime
   mtime="$(stat -c %Y "$config_file" 2>/dev/null || stat -f %m "$config_file" 2>/dev/null)"
 
-  if [[ -f "$cache_file" ]]; then
+  if [[ -z "$force" && -f "$cache_file" ]]; then
     local cached_mtime
     cached_mtime="$(head -n 1 "$cache_file" 2>/dev/null)"
     if [[ "$cached_mtime" == "$mtime" ]]; then

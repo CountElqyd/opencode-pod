@@ -225,3 +225,20 @@ EOF
   parse_toml "$TESTDIR/config.toml"
   [ "$CONFIG_CONTAINER_IMAGE" = "wolfi-base" ]
 }
+
+@test "parse_toml force flag bypasses cache" {
+  cat > "$TESTDIR/config.toml" << 'EOF'
+[container]
+image = "wolfi-base"
+user = "dev"
+EOF
+
+  CACHE_DIR="$TESTDIR/cache"
+  source lib/toml.sh
+  parse_toml "$TESTDIR/config.toml"
+  [ "$CONFIG_CONTAINER_IMAGE" = "wolfi-base" ]
+
+  sed -i 's/wolfi-base/neon/' "$TESTDIR/config.toml"
+  parse_toml "$TESTDIR/config.toml" force
+  [ "$CONFIG_CONTAINER_IMAGE" = "neon" ]
+}

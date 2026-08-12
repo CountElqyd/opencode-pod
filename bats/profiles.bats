@@ -1030,5 +1030,12 @@ _fake_resolve() {
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
   run _validate_toml_requirements '{"env":{"EVIL\u001fKEY":"x"}}'
   [ "$status" -eq 1 ]
-  [[ "$output" == *"control characters"* ]]
+  [[ "$output" == *"bare identifier"* || "$output" == *"control characters"* ]]
+}
+
+@test "_validate_toml_requirements rejects env key with dot" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _validate_toml_requirements '{"env":{"A.B":"x"}}'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"bare identifier"* ]]
 }

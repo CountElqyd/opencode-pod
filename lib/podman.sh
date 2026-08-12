@@ -230,7 +230,7 @@ run_bootstrap() {
     done
   fi
   # shellcheck disable=SC2064
-  trap "rmdir '$bootstrap_lock' 2>/dev/null" RETURN
+  trap "rmdir '$bootstrap_lock' 2>/dev/null || true" RETURN
 
   local container_user="${CONTAINER_USER:-dev}"
   local home_dir

@@ -95,7 +95,7 @@ print(json.dumps(req))
 # Usage: _validate_toml_requirements <requirements_json>
 _validate_toml_requirements() {
   printf '%s\n' "$1" | python3 -c '
-import sys, json
+import sys, json, re
 ALLOW = {"network": {"mode"}, "mounts": {"extra"}, "container": {"packages"}}
 try:
     req = json.load(sys.stdin)
@@ -111,6 +111,9 @@ for section, sub in req.items():
         sys.exit(1)
     if section == "env":
         for k, v in sub.items():
+            if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", k):
+                print(f"Unsupported toml key [env.{k}]: v1 supports bare identifier keys only", file=sys.stderr)
+                sys.exit(1)
             if any(ord(c) < 32 for c in k):
                 print(f"Unsupported toml key [env.{k}]: control characters are not supported in v1", file=sys.stderr)
                 sys.exit(1)
@@ -297,9 +300,10 @@ _apply_toml_requirements() {
   done <<< "$deltas"
 
   # Re-parse the config so container creation uses the newly written values.
-  # mtime-cached parse_toml refreshes CONFIG_* on the updated file.
+  # parse_toml's mtime cache can return stale values for same-second writes,
+  # so force a fresh parse.
   if declare -f parse_toml >/dev/null 2>&1; then
-    parse_toml "opencode-pod.toml" >/dev/null 2>&1 || true
+    parse_toml "opencode-pod.toml" force >/dev/null 2>&1 || true
   fi
 
   printf '  Destroying container...\n'
