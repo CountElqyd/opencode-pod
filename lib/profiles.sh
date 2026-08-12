@@ -557,13 +557,14 @@ for p in data.get('profiles', []):
   description=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("description",""))' 2>/dev/null || printf '')
   sha256_value=$(printf '%s\n' "$profile_json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("sha256",""))' 2>/dev/null || printf '')
 
-  _apply_toml_requirements "$profile_json" || {
-    local apply_rc=$?
-    if [[ $apply_rc -eq 3 ]]; then
-      printf 'Install cancelled.\n'
-    fi
+  _apply_toml_requirements "$profile_json"
+  local apply_rc=$?
+  if [[ $apply_rc -eq 3 ]]; then
+    printf 'Install cancelled.\n'
     exit 1
-  }
+  elif [[ $apply_rc -eq 1 ]]; then
+    exit 1
+  fi
 
   local tarball_url setup_url
   tarball_url="$(github_raw_url)/profiles/${name}/${name}.tar.gz"
@@ -670,11 +671,14 @@ for p in data.get('profiles', []):
   _apply_toml_requirements "$profile_json" || apply_rc=$?
   if [[ $apply_rc -eq 3 ]]; then
     printf 'Warning: profile toml requirements not applied (declined).\n' >&2
-  elif [[ $apply_rc -ne 0 ]]; then
+  elif [[ $apply_rc -eq 1 ]]; then
     printf 'Warning: failed to apply profile toml requirements.\n' >&2
   fi
 
-  if [[ "$installed_version" == "$new_version" ]] && ! $force; then
+  # A recreate (apply_rc=2) wiped the container home volume and registry via
+  # container_destroy, so the profile must be reinstalled even when the
+  # version is unchanged — do not take the "already at" shortcut.
+  if [[ $apply_rc -ne 2 ]] && [[ "$installed_version" == "$new_version" ]] && ! $force; then
     printf "Profile '%s' is already at v%s. Use --force to re-install.\n" "$name" "$new_version"
     return 0
   fi

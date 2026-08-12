@@ -412,12 +412,13 @@ _fake_resolve() {
   [[ "$flow" == *"start"* ]]
 }
 
-@test "cmd_profile_update applies toml delta even when version unchanged" {
+@test "cmd_profile_update applies toml delta and reinstalls when version unchanged" {
   source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
   resolve_project() { _fake_resolve; }
   cd "$TESTDIR"
   printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
   _load_registry() { printf '{"format_version":1,"profiles":[{"name":"ralph","version":"0.3.0"}]}'; }
+  _save_registry() { :; }
   _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"0.3.0","description":"New","components":{},"toml":{"network":{"mode":"host"}}}]}'; }
   _interactive() { return 0; }
   read() { RESPONSE="y"; }
@@ -428,12 +429,14 @@ _fake_resolve() {
     return 0
   }
   python3() { command python3 "$@"; }
-  export -f resolve_project _load_registry _fetch_index _interactive read container_destroy container_setup podman python3 _fake_resolve
+  sha256sum() { printf 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  -\n'; }
+  curl() { touch "$TESTDIR/curl_called"; return 0; }
+  export -f resolve_project _load_registry _save_registry _fetch_index _interactive read container_destroy container_setup podman python3 sha256sum curl _fake_resolve
   run cmd_profile_update "ralph"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"already at"* ]]
+  [[ "$output" != *"already at"* ]]
   grep -q 'mode = "host"' opencode-pod.toml
-  [ ! -f "$TESTDIR/podman_called" ]
+  [[ "$(cat "$TESTDIR/podman_called")" == *"exec"* ]]
 }
 
 @test "cmd_profile_update warns and proceeds when requirements declined" {
@@ -475,6 +478,30 @@ _fake_resolve() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"failed to apply"* ]]
   grep -q 'mode = "bridge"' opencode-pod.toml
+}
+
+@test "cmd_profile_install proceeds after applying toml requirements" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  resolve_project() { _fake_resolve; }
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  _load_registry() { printf '{"format_version":1,"profiles":[]}'; }
+  _save_registry() { :; }
+  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"1.0.0","description":"Test","components":{},"toml":{"network":{"mode":"host"}}}]}'; }
+  _interactive() { return 0; }
+  read() { RESPONSE="y"; }
+  container_destroy() { :; }
+  container_setup() { :; }
+  podman() { printf '%s\n' "$*" > "$TESTDIR/podman_called"; return 0; }
+  python3() { command python3 "$@"; }
+  sha256sum() { printf 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  -\n'; }
+  curl() { touch "$TESTDIR/curl_called"; return 0; }
+  export -f resolve_project _load_registry _save_registry _fetch_index _interactive read container_destroy container_setup podman python3 sha256sum curl _fake_resolve
+  run cmd_profile_install "ralph"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"installed"* ]]
+  grep -q 'mode = "host"' opencode-pod.toml
+  [[ "$(cat "$TESTDIR/podman_called")" == *"exec"* ]]
 }
 
 @test "cmd_profile_install aborts when toml requirements declined" {
