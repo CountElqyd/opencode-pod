@@ -14,7 +14,12 @@ data = json.load(open('$INDEX'))
 for p in data.get('profiles', []):
     if p.get('name') == '$NAME':
         print(p.get('version', '0.0.0'))
-" 2>/dev/null || echo "0.0.0")
+        sys.exit(0)
+sys.exit(1)
+" 2>/dev/null) || {
+  echo "Error: profile '$NAME' not found in profiles/index.json. Add it before building." >&2
+  exit 1
+}
 
 echo "Building Ralph profile v$VERSION..."
 

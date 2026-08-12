@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.4.0] - 2026-08-12
+
+### Features
+- Autonomous profile: lean zero-interruption execution profile — GSD-Core 1.5.0, Graphify, curated superpowers skills (systematic-debugging, verification-before-completion, requesting-code-review, self-consistency-reasoner)
+- `/autocode` command replacing `/launch-ralph`, with `autocode-runner` primary agent and `autocode-decider` subagent
+- Declarative `toml` profile requirements: profiles can require `opencode-pod.toml` values via a `toml` block in `profile.json`; `install`/`update` diff against active config, prompt once, then apply (destroying + recreating the container)
+- Bounded line-based TOML patcher that preserves comments and sibling lines
+
+### Security
+- Autonomous profile: hardened `opencode.json` permission schema and bash deny list
+- TOML requirement validation against a v1 allowlist (`network.mode`, `mounts.extra`, `container.packages`, `env.*`) — scalar strings only; env keys restricted to bare identifiers; control characters rejected
+
+### Bug Fixes
+- opencode pinned to 1.18.16 in bootstrap
+- Profile build fails when the profile is missing from the index
+- TOML requirement apply: survives `set -euo pipefail`, correct exit-code handling in `install`/`update`, reinstalls profile after recreate wipes the home volume, forces config refresh before recreating the container
+- Autonomous profile: `/autocode` pinned to `autocode-runner`, invalid `model: inherit` dropped, skills count corrected, graphify install hardened
+
+### Refactoring
+- `install`/`update` routed through the TOML requirements engine
+
+### Tests
+- Autonomous: index-tarball sha256 + VERSION consistency, gsd-config pre-seed alignment
+- Profiles: clean error output for malformed TOML requirements
+
+### Documentation
+- `README.md` + `profiles/README.md` document the TOML requirements feature; profile metadata release workflow recorded
+
 ## [0.3.1] - 2026-07-24
 
 ### Security

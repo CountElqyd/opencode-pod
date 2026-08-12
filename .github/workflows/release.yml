@@ -32,7 +32,7 @@ jobs:
       - name: Extract changelog entry
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          awk "/^## \\[${VERSION}\\]/,/^## \\[/" CHANGELOG.md | head -n -2 > release_notes.md
+          awk "/^## \\[${VERSION}\\]/ {found=1; next} found && /^## \\[/ {exit} found" CHANGELOG.md > release_notes.md
           echo "Release notes for v$VERSION:"
           cat release_notes.md
 

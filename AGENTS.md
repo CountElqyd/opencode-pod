@@ -21,3 +21,11 @@ Subsequent calls try the same offset first (idempotent).
 This avoids the bootstrap problem where the dev user doesn't exist yet.
 Do NOT assume a single offset works universally — the mapping varies by
 podman version and host UID.
+
+## Profile metadata releases
+
+Profile metadata changes (e.g. new `toml` requirements in `profile.json`)
+require bumping the profile version in `profiles/index.json` so the
+version-gated `profile update` picks them up. Rebuild the profile tarball
+(`bash profiles/<name>/build.sh`) and refresh its sha256 in the index.
+opencode-pod CLI changes bump `SCRIPT_VERSION` in `opencode-pod`.

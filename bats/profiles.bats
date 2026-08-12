@@ -382,8 +382,143 @@ _fake_resolve() {
   [ ! -f "$TESTDIR/saved_registry" ]
 }
 
-@test "cmd_profile_update network mode prompt when mode changes" {
-  skip "Network mode prompt test requires interactive terminal simulation"
+@test "cmd_profile_update applies toml delta and recreates when mode changes" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  resolve_project() { _fake_resolve; }
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  _load_registry() { printf '{"format_version":1,"profiles":[{"name":"ralph","version":"0.2.0"}]}'; }
+  _save_registry() { :; }
+  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"0.3.0","description":"New","components":{},"toml":{"network":{"mode":"host"}}}]}'; }
+  _interactive() { return 0; }
+  read() { RESPONSE="y"; }
+  container_destroy() { printf 'destroy\n' >> "$TESTDIR/flow"; }
+  container_setup() { printf 'setup\n' >> "$TESTDIR/flow"; }
+  podman() {
+    if [[ "$*" == "start"* ]]; then printf 'start\n' >> "$TESTDIR/flow"; return 0; fi
+    printf '%s\n' "$*" > "$TESTDIR/podman_called"; return 0
+  }
+  python3() { command python3 "$@"; }
+  sha256sum() { printf 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  -\n'; }
+  curl() { touch "$TESTDIR/curl_called"; return 0; }
+  export -f resolve_project _load_registry _save_registry _fetch_index _interactive read container_destroy container_setup podman python3 sha256sum curl _fake_resolve
+  run cmd_profile_update "ralph"
+  [ "$status" -eq 0 ]
+  grep -q 'mode = "host"' opencode-pod.toml
+  local flow
+  flow="$(cat "$TESTDIR/flow")"
+  [[ "$flow" == *"destroy"* ]]
+  [[ "$flow" == *"setup"* ]]
+  [[ "$flow" == *"start"* ]]
+}
+
+@test "cmd_profile_update applies toml delta and reinstalls when version unchanged" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  resolve_project() { _fake_resolve; }
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  _load_registry() { printf '{"format_version":1,"profiles":[{"name":"ralph","version":"0.3.0"}]}'; }
+  _save_registry() { :; }
+  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"0.3.0","description":"New","components":{},"toml":{"network":{"mode":"host"}}}]}'; }
+  _interactive() { return 0; }
+  read() { RESPONSE="y"; }
+  container_destroy() { :; }
+  container_setup() { :; }
+  podman() {
+    if [[ "$*" == *"exec"* || "$*" == *"cp"* ]]; then printf '%s\n' "$*" > "$TESTDIR/podman_called"; return 0; fi
+    return 0
+  }
+  python3() { command python3 "$@"; }
+  sha256sum() { printf 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  -\n'; }
+  curl() { touch "$TESTDIR/curl_called"; return 0; }
+  export -f resolve_project _load_registry _save_registry _fetch_index _interactive read container_destroy container_setup podman python3 sha256sum curl _fake_resolve
+  run cmd_profile_update "ralph"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"already at"* ]]
+  grep -q 'mode = "host"' opencode-pod.toml
+  [[ "$(cat "$TESTDIR/podman_called")" == *"exec"* ]]
+}
+
+@test "cmd_profile_update warns and proceeds when requirements declined" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  resolve_project() { _fake_resolve; }
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  _load_registry() { printf '{"format_version":1,"profiles":[{"name":"ralph","version":"0.2.0"}]}'; }
+  _save_registry() { :; }
+  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"0.3.0","description":"New","components":{},"toml":{"network":{"mode":"host"}}}]}'; }
+  _interactive() { return 0; }
+  read() { RESPONSE="n"; }
+  podman() { printf '%s\n' "$*" > "$TESTDIR/podman_called"; return 0; }
+  python3() { command python3 "$@"; }
+  sha256sum() { printf 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  -\n'; }
+  curl() { touch "$TESTDIR/curl_called"; return 0; }
+  export -f resolve_project _load_registry _save_registry _fetch_index _interactive read podman python3 sha256sum curl _fake_resolve
+  run cmd_profile_update "ralph"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"not applied"* ]]
+  grep -q 'mode = "bridge"' opencode-pod.toml
+}
+
+@test "cmd_profile_update non-TTY on delta warns and proceeds" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  resolve_project() { _fake_resolve; }
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  _load_registry() { printf '{"format_version":1,"profiles":[{"name":"ralph","version":"0.2.0"}]}'; }
+  _save_registry() { :; }
+  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"0.3.0","description":"New","components":{},"toml":{"network":{"mode":"host"}}}]}'; }
+  _interactive() { return 1; }
+  podman() { printf '%s\n' "$*" > "$TESTDIR/podman_called"; return 0; }
+  python3() { command python3 "$@"; }
+  sha256sum() { printf 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  -\n'; }
+  curl() { touch "$TESTDIR/curl_called"; return 0; }
+  export -f resolve_project _load_registry _save_registry _fetch_index _interactive podman python3 sha256sum curl _fake_resolve
+  run cmd_profile_update "ralph"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"failed to apply"* ]]
+  grep -q 'mode = "bridge"' opencode-pod.toml
+}
+
+@test "cmd_profile_install proceeds after applying toml requirements" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  resolve_project() { _fake_resolve; }
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  _load_registry() { printf '{"format_version":1,"profiles":[]}'; }
+  _save_registry() { :; }
+  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"1.0.0","description":"Test","components":{},"toml":{"network":{"mode":"host"}}}]}'; }
+  _interactive() { return 0; }
+  read() { RESPONSE="y"; }
+  container_destroy() { :; }
+  container_setup() { :; }
+  podman() { printf '%s\n' "$*" > "$TESTDIR/podman_called"; return 0; }
+  python3() { command python3 "$@"; }
+  sha256sum() { printf 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  -\n'; }
+  curl() { touch "$TESTDIR/curl_called"; return 0; }
+  export -f resolve_project _load_registry _save_registry _fetch_index _interactive read container_destroy container_setup podman python3 sha256sum curl _fake_resolve
+  run cmd_profile_install "ralph"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"installed"* ]]
+  grep -q 'mode = "host"' opencode-pod.toml
+  [[ "$(cat "$TESTDIR/podman_called")" == *"exec"* ]]
+}
+
+@test "cmd_profile_install aborts when toml requirements declined" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  resolve_project() { _fake_resolve; }
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  _load_registry() { printf '{"format_version":1,"profiles":[]}'; }
+  _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"1.0.0","description":"Test","components":{},"toml":{"network":{"mode":"host"}}}]}'; }
+  _interactive() { return 0; }
+  read() { RESPONSE="n"; }
+  python3() { command python3 "$@"; }
+  export -f resolve_project _load_registry _fetch_index _interactive read python3 _fake_resolve
+  run cmd_profile_install "ralph"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Install cancelled"* ]]
+  grep -q 'mode = "bridge"' opencode-pod.toml
 }
 
 # --- Helper tests ---
@@ -433,4 +568,474 @@ _fake_resolve() {
   saved="$(cat "$TESTDIR/opencode-pod/profiles.json")"
   [[ "$saved" == *'"path":""'* ]]
   [[ "$saved" == *'"ralph"'* ]]
+}
+
+# --- Declared toml requirements ---
+
+@test "_declared_toml_requirements maps legacy network field to toml.network.mode" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _declared_toml_requirements '{"name":"x","network":"host"}'
+  [ "$status" -eq 0 ]
+  [ "$output" = '{"network": {"mode": "host"}}' ]
+}
+
+@test "_declared_toml_requirements toml block wins over legacy network" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _declared_toml_requirements '{"name":"x","network":"host","toml":{"network":{"mode":"bridge"}}}'
+  [ "$status" -eq 0 ]
+  [ "$output" = '{"network": {"mode": "bridge"}}' ]
+}
+
+@test "_declared_toml_requirements ignores empty legacy network" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _declared_toml_requirements '{"name":"x","network":""}'
+  [ "$status" -eq 0 ]
+  [ "$output" = '{}' ]
+}
+
+@test "_declared_toml_requirements empty when neither block present" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _declared_toml_requirements '{"name":"x"}'
+  [ "$status" -eq 0 ]
+  [ "$output" = '{}' ]
+}
+
+@test "_validate_toml_requirements accepts allowlisted scalar keys" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _validate_toml_requirements '{"network":{"mode":"host"},"env":{"FOO":"bar"}}'
+  [ "$status" -eq 0 ]
+}
+
+@test "_validate_toml_requirements rejects unknown section" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _validate_toml_requirements '{"bogus":{"x":"y"}}'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Unknown toml requirement section"* ]]
+}
+
+@test "_validate_toml_requirements rejects unknown key in known section" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _validate_toml_requirements '{"network":{"garbage":"x"}}'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Unknown toml requirement key"* ]]
+}
+
+@test "_validate_toml_requirements rejects array value (unsupported in v1)" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _validate_toml_requirements '{"mounts":{"extra":["/opt/foo"]}}'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"arrays"* ]]
+}
+
+@test "_validate_toml_requirements rejects non-object section value" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _validate_toml_requirements '{"network":"host"}'
+  [ "$status" -eq 1 ]
+  [[ "$output" != *"Traceback"* ]]
+  [[ "$output" == *"[network]"* ]]
+}
+
+@test "_validate_toml_requirements rejects non-string env value" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _validate_toml_requirements '{"env":{"FOO":1}}'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"scalar strings"* ]]
+  [[ "$output" != *"Traceback"* ]]
+}
+
+@test "_validate_toml_requirements rejects malformed JSON" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _validate_toml_requirements 'not-json'
+  [ "$status" -eq 1 ]
+  [[ "$output" != *"Traceback"* ]]
+  [[ "$output" == *"expected a JSON object"* ]]
+}
+
+@test "_validate_toml_requirements echoes valid requirements" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _validate_toml_requirements '{"network":{"mode":"host"}}'
+  [ "$status" -eq 0 ]
+  [ "$output" = '{"network": {"mode": "host"}}' ]
+}
+
+@test "_declared_toml_requirements rejects non-object toml block" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _declared_toml_requirements '{"name":"x","toml":"host"}'
+  [ "$status" -eq 1 ]
+  [[ "$output" != *"Traceback"* ]]
+  [[ "$output" == *"toml block"* ]]
+}
+
+@test "_declared_toml_requirements rejects malformed JSON" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _declared_toml_requirements 'not-json'
+  [ "$status" -eq 1 ]
+  [[ "$output" != *"Traceback"* ]]
+  [[ "$output" == *"expected a JSON object"* ]]
+}
+
+# --- toml diff + interactivity ---
+
+@test "_toml_deltas reports changed scalar" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  run _toml_deltas '{"network":{"mode":"host"}}'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'network\x1fmode\x1fbridge\x1fhost'* ]]
+}
+
+@test "_toml_deltas empty when values match" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  run _toml_deltas '{"network":{"mode":"bridge"}}'
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "_toml_deltas handles missing section and env keys" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[container]\nuser = "dev"\n' > opencode-pod.toml
+  run _toml_deltas '{"env":{"FOO":"bar"},"network":{"mode":"host"}}'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'env\x1fFOO\x1f\x1fbar'* ]]
+  [[ "$output" == *$'network\x1fmode\x1f\x1fhost'* ]]
+}
+
+@test "_toml_deltas degrades to always-differ when toml unparsable" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf 'not [valid = toml\n' > opencode-pod.toml
+  run _toml_deltas '{"network":{"mode":"host"}}'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'network\x1fmode\x1f\x1fhost'* ]]
+}
+
+@test "_interactive is false under bats (non-TTY)" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _interactive
+  [ "$status" -ne 0 ]
+}
+
+@test "_interactive is overridable (returns 0 when stubbed)" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  _interactive() { return 0; }
+  export -f _interactive
+  run _interactive
+  [ "$status" -eq 0 ]
+}
+
+@test "_toml_deltas degrades when tomllib unavailable" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  local pyblock
+  pyblock="$TESTDIR/pyblock"
+  mkdir -p "$pyblock"
+  printf 'import sys\nclass Blocker:\n    def find_spec(self, name, path=None, target=None):\n        if name == "tomllib":\n            raise ImportError("blocked for test")\n        return None\nsys.meta_path.insert(0, Blocker())\n' > "$pyblock/sitecustomize.py"
+  PYTHONPATH="$pyblock" run _toml_deltas '{"network":{"mode":"host"}}'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'network\x1fmode\x1f\x1fhost'* ]]
+}
+
+@test "_toml_deltas survives top-level scalar section collision" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf 'network = "host"\n' > opencode-pod.toml
+  run _toml_deltas '{"network":{"mode":"host"}}'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'network\x1fmode\x1f\x1fhost'* ]]
+}
+
+@test "_toml_deltas normalizes boolean current value" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[env]\nDEBUG = true\n' > opencode-pod.toml
+  run _toml_deltas '{"env":{"DEBUG":"true"}}'
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "_toml_deltas normalizes integer current value" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[env]\nPORT = 8080\n' > opencode-pod.toml
+  run _toml_deltas '{"env":{"PORT":"8080"}}'
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "_toml_deltas reports delta when bool current differs from declared" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[env]\nDEBUG = true\n' > opencode-pod.toml
+  run _toml_deltas '{"env":{"DEBUG":"false"}}'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'env\x1fDEBUG\x1ftrue\x1ffalse'* ]]
+}
+
+# --- toml line patcher ---
+
+@test "_toml_set updates existing key preserving comments and siblings" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '# top comment\n[network]\n# mode comment\nmode = "bridge"\nforward = []\n' > test.toml
+  run _toml_set test.toml network mode host
+  [ "$status" -eq 0 ]
+  grep -q 'mode = "host"' test.toml
+  grep -q '# top comment' test.toml
+  grep -q '# mode comment' test.toml
+  grep -q 'forward = \[\]' test.toml
+}
+
+@test "_toml_set adds key to existing section" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network]\nforward = []\n' > test.toml
+  run _toml_set test.toml network mode host
+  [ "$status" -eq 0 ]
+  grep -q 'mode = "host"' test.toml
+  grep -q 'forward = \[\]' test.toml
+}
+
+@test "_toml_set adds missing section at end" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[container]\nuser = "dev"\n' > test.toml
+  run _toml_set test.toml network mode host
+  [ "$status" -eq 0 ]
+  grep -q '\[network\]' test.toml
+  grep -q 'mode = "host"' test.toml
+  grep -q 'user = "dev"' test.toml
+}
+
+@test "_toml_set does not touch other sections when adding" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[security]\nharden = true\n' > test.toml
+  run _toml_set test.toml network mode host
+  [ "$status" -eq 0 ]
+  grep -q 'harden = true' test.toml
+  grep -q '\[network\]' test.toml
+}
+
+@test "_toml_set adds key to existing non-last section" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network]\nforward = []\n[volume]\nuser = "dev"\n' > test.toml
+  run _toml_set test.toml network mode host
+  [ "$status" -eq 0 ]
+  awk '/^\[/ {sec=$0} /^mode = / {print sec}' test.toml | grep -q '\[network\]'
+  grep -q 'user = "dev"' test.toml
+}
+
+@test "_toml_set updates key in non-last section without duplicate" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n[volume]\nuser = "dev"\n' > test.toml
+  run _toml_set test.toml network mode host
+  [ "$status" -eq 0 ]
+  [ "$(grep -c '^mode = ' test.toml)" -eq 1 ]
+  grep -q 'mode = "host"' test.toml
+  grep -q 'user = "dev"' test.toml
+  python3 -c 'import tomllib; tomllib.load(open("test.toml", "rb"))'
+}
+
+@test "_toml_set escapes env key regex metacharacters" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[env]\nAOB = "keepme"\n' > test.toml
+  run _toml_set test.toml env 'A.B' 'x'
+  [ "$status" -eq 0 ]
+  grep -q 'AOB = "keepme"' test.toml
+  grep -q 'A.B = "x"' test.toml
+  python3 -c 'import tomllib; tomllib.load(open("test.toml", "rb"))'
+}
+
+@test "_toml_set matches section header with trailing whitespace" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network]  \nmode = "bridge"\n' > test.toml
+  run _toml_set test.toml network mode host
+  [ "$status" -eq 0 ]
+  [ "$(grep -c '^\[network\]' test.toml)" -eq 1 ]
+  grep -q 'mode = "host"' test.toml
+  python3 -c 'import tomllib; tomllib.load(open("test.toml", "rb"))'
+}
+
+@test "_toml_set matches section header with trailing comment" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network] # net section\nmode = "bridge"\n' > test.toml
+  run _toml_set test.toml network mode host
+  [ "$status" -eq 0 ]
+  [ "$(grep -c '^\[network\]' test.toml)" -eq 1 ]
+  grep -q 'mode = "host"' test.toml
+  grep -q '# net section' test.toml
+  python3 -c 'import tomllib; tomllib.load(open("test.toml", "rb"))'
+}
+
+@test "_toml_set escapes quotes and backslashes in value" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[env]\nA = "old"\n' > test.toml
+  run _toml_set test.toml env A 'a"b\c'
+  [ "$status" -eq 0 ]
+  local parsed
+  parsed="$(python3 -c 'import tomllib; print(tomllib.load(open("test.toml","rb"))["env"]["A"])')"
+  [ "$parsed" = 'a"b\c' ]
+}
+
+# --- _apply_toml_requirements ---
+
+@test "_apply_toml_requirements no-op when no deltas" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network]\nmode = "host"\n' > opencode-pod.toml
+  podman() { printf '%s\n' "$*" > "$TESTDIR/podman_called"; return 0; }
+  export -f podman
+  run _apply_toml_requirements '{"network":"host"}'
+  [ "$status" -eq 0 ]
+  [ ! -f "$TESTDIR/podman_called" ]
+}
+
+@test "_apply_toml_requirements hard-errors non-TTY on delta" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  _interactive() { return 1; }
+  export -f _interactive
+  run _apply_toml_requirements '{"network":"host"}'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"without a terminal"* ]]
+  grep -q 'mode = "bridge"' opencode-pod.toml
+}
+
+@test "_apply_toml_requirements applies and recreates on accepted delta" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  _interactive() { return 0; }
+  read() { RESPONSE="y"; }
+  container_destroy() { printf 'destroy\n' >> "$TESTDIR/flow"; }
+  container_setup() { printf 'setup\n' >> "$TESTDIR/flow"; }
+  podman() {
+    if [[ "$*" == "start"* ]]; then printf 'start\n' >> "$TESTDIR/flow"; return 0; fi
+    return 0
+  }
+  export -f _interactive read container_destroy container_setup podman
+  run _apply_toml_requirements '{"network":"host"}'
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"[network.mode]"* ]]
+  [[ "$output" == *"host"* ]]
+  grep -q 'mode = "host"' opencode-pod.toml
+  local flow
+  flow="$(cat "$TESTDIR/flow")"
+  [[ "$flow" == *"destroy"* ]]
+  [[ "$flow" == *"setup"* ]]
+  [[ "$flow" == *"start"* ]]
+}
+
+@test "_apply_toml_requirements declined leaves toml unchanged and returns 3" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  _interactive() { return 0; }
+  read() { RESPONSE="n"; }
+  container_destroy() { printf 'destroy\n' >> "$TESTDIR/flow"; }
+  export -f _interactive read container_destroy
+  run _apply_toml_requirements '{"network":"host"}'
+  [ "$status" -eq 3 ]
+  grep -q 'mode = "bridge"' opencode-pod.toml
+  [ ! -f "$TESTDIR/flow" ]
+}
+
+@test "_apply_toml_requirements recreates with fresh CONFIG_NETWORK_MODE after apply" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  _interactive() { return 0; }
+  read() { RESPONSE="y"; }
+  container_destroy() { :; }
+  container_setup() { printf 'setup CONFIG_NETWORK_MODE=%s\n' "${CONFIG_NETWORK_MODE:-}" >> "$TESTDIR/flow"; }
+  podman() { return 0; }
+  parse_toml() {
+    CONFIG_NETWORK_MODE="$(python3 -c 'import tomllib; print(tomllib.load(open("opencode-pod.toml","rb")).get("network",{}).get("mode",""))')"
+  }
+  export -f _interactive read container_destroy container_setup podman parse_toml
+  run _apply_toml_requirements '{"network":"host"}'
+  [ "$status" -eq 2 ]
+  grep -q 'setup CONFIG_NETWORK_MODE=host' "$TESTDIR/flow"
+}
+
+@test "_apply_toml_requirements rejects invalid block before prompting" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  _interactive() { printf 'SHOULD NOT BE CALLED\n' > "$TESTDIR/interactive_called"; return 0; }
+  export -f _interactive
+  run _apply_toml_requirements '{"toml":{"bogus":{"x":"y"}}}'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Unknown toml requirement section"* ]]
+  [ ! -f "$TESTDIR/interactive_called" ]
+  grep -q 'mode = "bridge"' opencode-pod.toml
+}
+
+@test "_apply_toml_requirements recreate failure returns 1" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  _interactive() { return 0; }
+  read() { RESPONSE="y"; }
+  container_destroy() { return 0; }
+  container_setup() { return 1; }
+  export -f _interactive read container_destroy container_setup
+  run _apply_toml_requirements '{"network":"host"}'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"recreate failed"* ]]
+}
+
+@test "_apply_toml_requirements applies absent key with declared value" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[container]\nuser = "dev"\n' > opencode-pod.toml
+  _interactive() { return 0; }
+  read() { RESPONSE="y"; }
+  container_destroy() { :; }
+  container_setup() { :; }
+  podman() { return 0; }
+  export -f _interactive read container_destroy container_setup podman
+  run _apply_toml_requirements '{"toml":{"container":{"packages":"git"}}}'
+  [ "$status" -eq 2 ]
+  grep -q 'packages = "git"' opencode-pod.toml
+}
+
+@test "_validate_toml_requirements rejects value with newline" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _validate_toml_requirements '{"env":{"EVIL":"foo\nbar"}}'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"control characters"* ]]
+}
+
+@test "_validate_toml_requirements rejects value with tab" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _validate_toml_requirements '{"network":{"mode":"host\t"}}'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"control characters"* ]]
+}
+
+@test "_validate_toml_requirements rejects env key with control character" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _validate_toml_requirements '{"env":{"EVIL\u001fKEY":"x"}}'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"bare identifier"* || "$output" == *"control characters"* ]]
+}
+
+@test "_validate_toml_requirements rejects env key with dot" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _validate_toml_requirements '{"env":{"A.B":"x"}}'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"bare identifier"* ]]
 }

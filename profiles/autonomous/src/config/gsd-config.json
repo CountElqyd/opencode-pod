@@ -1,0 +1,26 @@
+{
+  "workflow": {
+    "tdd_mode": true,
+    "use_worktrees": false,
+    "code_review": true,
+    "code_review_depth": "standard",
+    "quality_gates": {
+      "enabled": false,
+      "severity": "warn"
+    }
+  },
+  "graphify": {
+    "auto_update": true
+  },
+  "agent_skills": {
+    "gsd-executor": [
+      "global:/home/dev/.config/opencode/skills/superpowers/systematic-debugging",
+      "global:/home/dev/.config/opencode/skills/superpowers/verification-before-completion",
+      "global:/home/dev/.config/opencode/skills/superpowers/requesting-code-review",
+      "global:/home/dev/.config/opencode/skills/superpowers/self-consistency-reasoner"
+    ]
+  },
+  "agent_skills_security": {
+    "trusted_global_roots": ["/home/dev/.config/opencode/skills"]
+  }
+}

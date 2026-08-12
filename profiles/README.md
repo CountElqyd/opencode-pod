@@ -13,7 +13,7 @@ Each profile directory contains:
 | `setup.sh` | Yes | Installs the profile inside the container (called by `opencode-pod profile install`) |
 | `build.sh` | Yes | Rebuilds `<name>.tar.gz` from `src/` |
 | `<name>.tar.gz` | Yes | Packaged profile source: VERSION + `src/` contents (built by `build.sh`) |
-| `profile.json` | No | Local metadata — `profiles/index.json` is the canonical registry |
+| `profile.json` | No | Local metadata; may declare a `toml` block of required `opencode-pod.toml` values (see below). `profiles/index.json` is the canonical registry |
 | `src/` | Yes | Editable source files that `build.sh` packs into the tarball |
 
 `VERSION` is **not** a standalone file. Each profile's version is declared in
@@ -38,6 +38,45 @@ file into the tarball at build time. `setup.sh` reads it from the tarball via
 The project directory (where `opencode-pod` is run) is mounted at `/workspace`
 inside the container. Profiles are **not** volume-mounted — they are fetched
 from GitHub as needed.
+
+## Declaring toml requirements
+
+Profiles can require `opencode-pod.toml` values through a `toml` block in
+`profile.json`:
+
+```json
+{
+  "toml": {
+    "network": { "mode": "host" },
+    "container": { "packages": "python3-pip" }
+  }
+}
+```
+
+`opencode-pod profile install` and `profile update` diff the declared values
+against the active config, prompt once for confirmation, and apply the delta.
+The v1 allowlist is entirely recreate-class: any applied delta destroys and
+recreates the container (wiping the home volume), and the profile is
+reinstalled by the same command. Declining the prompt cancels `install`;
+`update` warns and continues. Run interactively — a pending change in a
+non-interactive session aborts `install` (and warns on `update`). The
+requirements are applied on every `update`, even when the profile version is
+unchanged.
+
+The legacy top-level `network` key in `profile.json` is an alias for
+`toml.network.mode`; if both are present, the `toml` block wins.
+
+### v1 allowlist
+
+| Key path | Type | Description |
+|----------|------|-------------|
+| `network.mode` | string | Container network mode (`host`, `bridge`, …) |
+| `mounts.extra` | string | Extra bind mount path |
+| `container.packages` | string | Additional container package (wl-paste, etc.) |
+| `env.<KEY>` | string | Environment variable; `<KEY>` must be a bare identifier (`[A-Za-z_][A-Za-z0-9_]*`) |
+
+Values must be scalar strings — arrays and non-string values are rejected at
+validation.
 
 ## Adding a new profile
 
@@ -71,6 +110,35 @@ pre-built [fabric-mcp](ralph/src/fabric-mcp/) MCP server for Fabric AI pattern
 integration.
 
 See `profiles/ralph/src/config/opencode.json` for the reference permission model.
+
+## Built-in profile: `swarm`
+
+The `swarm/` profile is a package-manager profile: it installs the
+`opencode-swarm` npm plugin (`npm install -g opencode-swarm` followed by
+`opencode-swarm install`) for verification-gated, architect-led multi-agent
+development — 18 agents, 30 commands, a gated QA pipeline, and built-in SAST.
+The tarball ships `src/config/opencode-swarm.json`, which is copied to
+`$HOME/.config/opencode/` after the plugin install. It includes agent model
+overrides and session tuning knobs (`session_mode`, `project_mode`,
+`max_parallel_coders`, `council`, `ui_review`, `mutation_testing`). Uses
+`network: bridge` — no host networking needed to reach external LLM APIs — and
+records `~/.swarm-version` for the idempotency guard.
+
+See `profiles/swarm/src/config/opencode-swarm.json` for the session
+configuration reference.
+
+## Built-in profile: `autonomous`
+
+The `autonomous/` profile is a lean execution profile for zero-interruption
+autonomous sessions: GSD-Core (pinned 1.5.0) with `tdd_mode` + curated
+superpowers skills (`systematic-debugging`, `verification-before-completion`,
+`requesting-code-review`, `self-consistency-reasoner`) injected via
+`agent_skills`, the Graphify CLI for codebase queries, and the review agents
+(`code-reviewer`, `red-team`). No fabric-mcp. Requires `network: host` to reach
+a local LLM (ollama/llama.cpp).
+
+See `profiles/autonomous/src/config/opencode.json` for the permission model and
+`profiles/autonomous/src/config/gsd-config.json` for the injected skill list.
 
 ## Versioning
 

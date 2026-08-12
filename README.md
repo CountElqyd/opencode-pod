@@ -1,7 +1,7 @@
 # opencode-pod
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.3.1-blue)](VERSION)
+[![Version](https://img.shields.io/badge/version-0.4.0-blue)](VERSION)
 [![Tests](https://img.shields.io/github/actions/workflow/status/CountElqyd/opencode-pod/test.yml?branch=main&label=tests)](https://github.com/CountElqyd/opencode-pod/actions)
 [![Shell](https://img.shields.io/badge/shell-bash-4EAA25?logo=gnubash)](https://www.gnu.org/software/bash/)
 [![Podman](https://img.shields.io/badge/podman-%3E%3D4.3-892CA0?logo=podman)](https://podman.io)
@@ -88,6 +88,8 @@ opencode-pod profile update ralph         # re-download latest
 ```
 
 `install` and `update` fetch the profile from GitHub and run setup inside the container automatically. Profiles can be committed to your repo (pinning a version for the team) or gitignored (each developer installs independently). See [`profiles/README.md`](profiles/README.md) for the convention and how to create custom profiles.
+
+Profiles can additionally declare required `opencode-pod.toml` values via a `toml` block in `profile.json` (e.g. `{"network": {"mode": "host"}}`). `install` and `update` diff the declared values against your active config and — when anything changed — prompt once for confirmation, then apply the delta by destroying and recreating the container (the profile is reinstalled by the same command). Declining the prompt cancels `install`; `update` warns and continues. The requirements are synced on every `update`, even when the profile version is unchanged. Run interactively: a pending change in a non-interactive session aborts `install` (and warns on `update`). See [`profiles/README.md`](profiles/README.md) for the schema and allowlist.
 
 ---
 
