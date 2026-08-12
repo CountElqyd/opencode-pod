@@ -4,7 +4,7 @@
   "author": "opencode-pod",
   "components": {
     "skills": 6,
-    "commands": 2,
+    "commands": 3,
     "plugins": 1,
     "gsd_core": "1.5.0",
     "graphify": true

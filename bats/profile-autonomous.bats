@@ -370,7 +370,7 @@ import json
 m = json.load(open('$BATS_TEST_DIRNAME/../profiles/autonomous/profile.json'))
 c = m['components']
 assert c['skills'] == 6, c
-assert c['commands'] == 2, c
+assert c['commands'] == 3, c
 assert c['plugins'] == 1, c
 "
 }
