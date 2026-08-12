@@ -44,3 +44,10 @@
 
 - Untracked `debug` file in repo root (851KB, pre-existing). Do NOT sweep into commits. Review whether to gitignore or remove.
 - No state.md existed before; this file created as the plan-status record.
+
+### Docs
+
+- README.md + profiles/README.md updated to document the toml requirements feature (commit 8031e6d on feat/add-autonomous-profile):
+  - README.md Profiles section: paragraph on the `toml` block, diff/prompt/recreate flow, decline semantics, update version-gate independence, non-TTY behavior.
+  - profiles/README.md: `profile.json` table row updated; new "Declaring toml requirements" section with JSON example, v1 allowlist table, legacy `network` alias (toml wins), recreate/destructive warning.
+  - Verified semantics against lib/profiles.sh (allowlist keys, rc 3 decline on install aborts / update warns, rc 1 non-TTY install aborts / update warns, rc 2 recreate).
