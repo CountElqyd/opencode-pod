@@ -872,3 +872,10 @@ _fake_resolve() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"control characters"* ]]
 }
+
+@test "_validate_toml_requirements rejects env key with control character" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _validate_toml_requirements '{"env":{"EVIL\u001fKEY":"x"}}'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"control characters"* ]]
+}

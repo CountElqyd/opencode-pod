@@ -111,6 +111,9 @@ for section, sub in req.items():
         sys.exit(1)
     if section == "env":
         for k, v in sub.items():
+            if any(ord(c) < 32 for c in k):
+                print(f"Unsupported toml key [env.{k}]: control characters are not supported in v1", file=sys.stderr)
+                sys.exit(1)
             if not isinstance(v, str):
                 print(f"Unsupported value for toml key [env.{k}]: v1 supports scalar strings only", file=sys.stderr)
                 sys.exit(1)
