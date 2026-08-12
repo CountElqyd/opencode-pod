@@ -114,6 +114,9 @@ for section, sub in req.items():
             if not isinstance(v, str):
                 print(f"Unsupported value for toml key [env.{k}]: v1 supports scalar strings only", file=sys.stderr)
                 sys.exit(1)
+            if any(ord(c) < 32 for c in v):
+                print(f"Unsupported value for toml key [env.{k}]: control characters are not supported in v1", file=sys.stderr)
+                sys.exit(1)
         continue
     if section not in ALLOW:
         print(f"Unknown toml requirement section: [{section}]", file=sys.stderr)
@@ -128,6 +131,9 @@ for section, sub in req.items():
         if not isinstance(v, str):
             print(f"Unsupported value for toml key [{section}.{k}]: v1 supports scalar strings only", file=sys.stderr)
             sys.exit(1)
+        if any(ord(c) < 32 for c in v):
+            print(f"Unsupported value for toml key [{section}.{k}]: control characters are not supported in v1", file=sys.stderr)
+            sys.exit(1)
 print(json.dumps(req))
 '
 }
@@ -137,9 +143,10 @@ _interactive() {
   [[ -t 0 ]]
 }
 
-# Print tab-separated delta lines for declared requirements that differ from
-# the current opencode-pod.toml: "section<TAB>key<TAB>current<TAB>declared".
-# Missing current values print as empty. If tomllib is unavailable or the toml
+# Print unit-separator (\x1f) delta lines for declared requirements that differ
+# from the current opencode-pod.toml: "section\x1fkey\x1fcurrent\x1fdeclared".
+# \x1f is not IFS whitespace, so empty middle fields survive a read. Missing
+# current values print as empty. If tomllib is unavailable or the toml
 # is unparsable, every declared key is reported as differing (documented
 # degradation — the caller's prompt/apply path still works).
 # Usage: _toml_deltas <requirements_json>
@@ -176,7 +183,7 @@ for section, sub in req.items():
         curv = sec.get(k) if isinstance(sec, dict) else None
         normv = norm(curv)
         if normv != v:
-            print(f"{section}\t{k}\t{normv}\t{v}")
+            print(f"{section}\x1f{k}\x1f{normv}\x1f{v}")
 ' <<< "$1"
 }
 
@@ -260,17 +267,17 @@ _apply_toml_requirements() {
 
   req="$(_validate_toml_requirements "$req")" || return 1
 
-  deltas="$(_toml_deltas "$req")"
+  deltas="$(_toml_deltas "$req")" || { printf 'Error: failed to compute toml requirements diff.\n' >&2; return 1; }
   [[ -z "$deltas" ]] && return 0
 
   if ! _interactive; then
     printf 'Error: profile toml requirements cannot be applied without a terminal.\n' >&2
-    printf '  Run interactively to confirm container changes.\n' >&2
+    printf '  Run interactively to confirm container recreation.\n' >&2
     return 1
   fi
 
   printf 'Profile requires the following opencode-pod.toml changes:\n'
-  while IFS=$'\t' builtin read -r section key curval newval; do
+  while IFS=$'\x1f' builtin read -r section key curval newval; do
     printf '  [%s.%s]: %s -> %s\n' "$section" "$key" "${curval:-<absent>}" "$newval"
   done <<< "$deltas"
 
@@ -281,7 +288,7 @@ _apply_toml_requirements() {
     return 3
   fi
 
-  while IFS=$'\t' builtin read -r section key curval newval; do
+  while IFS=$'\x1f' builtin read -r section key curval newval; do
     _toml_set "opencode-pod.toml" "$section" "$key" "$newval"
   done <<< "$deltas"
 

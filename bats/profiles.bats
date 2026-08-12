@@ -547,7 +547,7 @@ _fake_resolve() {
   printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
   run _toml_deltas '{"network":{"mode":"host"}}'
   [ "$status" -eq 0 ]
-  [[ "$output" == *$'network\tmode\tbridge\thost'* ]]
+  [[ "$output" == *$'network\x1fmode\x1fbridge\x1fhost'* ]]
 }
 
 @test "_toml_deltas empty when values match" {
@@ -565,8 +565,8 @@ _fake_resolve() {
   printf '[container]\nuser = "dev"\n' > opencode-pod.toml
   run _toml_deltas '{"env":{"FOO":"bar"},"network":{"mode":"host"}}'
   [ "$status" -eq 0 ]
-  [[ "$output" == *$'env\tFOO\t\tbar'* ]]
-  [[ "$output" == *$'network\tmode\t\thost'* ]]
+  [[ "$output" == *$'env\x1fFOO\x1f\x1fbar'* ]]
+  [[ "$output" == *$'network\x1fmode\x1f\x1fhost'* ]]
 }
 
 @test "_toml_deltas degrades to always-differ when toml unparsable" {
@@ -575,7 +575,7 @@ _fake_resolve() {
   printf 'not [valid = toml\n' > opencode-pod.toml
   run _toml_deltas '{"network":{"mode":"host"}}'
   [ "$status" -eq 0 ]
-  [[ "$output" == *$'network\tmode\t\thost'* ]]
+  [[ "$output" == *$'network\x1fmode\x1f\x1fhost'* ]]
 }
 
 @test "_interactive is false under bats (non-TTY)" {
@@ -602,7 +602,7 @@ _fake_resolve() {
   printf 'import sys\nclass Blocker:\n    def find_spec(self, name, path=None, target=None):\n        if name == "tomllib":\n            raise ImportError("blocked for test")\n        return None\nsys.meta_path.insert(0, Blocker())\n' > "$pyblock/sitecustomize.py"
   PYTHONPATH="$pyblock" run _toml_deltas '{"network":{"mode":"host"}}'
   [ "$status" -eq 0 ]
-  [[ "$output" == *$'network\tmode\t\thost'* ]]
+  [[ "$output" == *$'network\x1fmode\x1f\x1fhost'* ]]
 }
 
 @test "_toml_deltas survives top-level scalar section collision" {
@@ -611,7 +611,7 @@ _fake_resolve() {
   printf 'network = "host"\n' > opencode-pod.toml
   run _toml_deltas '{"network":{"mode":"host"}}'
   [ "$status" -eq 0 ]
-  [[ "$output" == *$'network\tmode\t\thost'* ]]
+  [[ "$output" == *$'network\x1fmode\x1f\x1fhost'* ]]
 }
 
 @test "_toml_deltas normalizes boolean current value" {
@@ -638,7 +638,7 @@ _fake_resolve() {
   printf '[env]\nDEBUG = true\n' > opencode-pod.toml
   run _toml_deltas '{"env":{"DEBUG":"false"}}'
   [ "$status" -eq 0 ]
-  [[ "$output" == *$'env\tDEBUG\ttrue\tfalse'* ]]
+  [[ "$output" == *$'env\x1fDEBUG\x1ftrue\x1ffalse'* ]]
 }
 
 # --- toml line patcher ---
@@ -842,4 +842,33 @@ _fake_resolve() {
   run _apply_toml_requirements '{"network":"host"}'
   [ "$status" -eq 1 ]
   [[ "$output" == *"recreate failed"* ]]
+}
+
+@test "_apply_toml_requirements applies absent key with declared value" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[container]\nuser = "dev"\n' > opencode-pod.toml
+  _interactive() { return 0; }
+  read() { RESPONSE="y"; }
+  container_destroy() { :; }
+  container_setup() { :; }
+  podman() { return 0; }
+  export -f _interactive read container_destroy container_setup podman
+  run _apply_toml_requirements '{"toml":{"container":{"packages":"git"}}}'
+  [ "$status" -eq 2 ]
+  grep -q 'packages = "git"' opencode-pod.toml
+}
+
+@test "_validate_toml_requirements rejects value with newline" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _validate_toml_requirements '{"env":{"EVIL":"foo\nbar"}}'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"control characters"* ]]
+}
+
+@test "_validate_toml_requirements rejects value with tab" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  run _validate_toml_requirements '{"network":{"mode":"host\t"}}'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"control characters"* ]]
 }
