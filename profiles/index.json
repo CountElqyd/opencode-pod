@@ -49,7 +49,9 @@
       "path": "profiles/autonomous/",
       "author": "opencode-pod",
       "components": {
-        "skills": 4,
+        "skills": 6,
+        "commands": 3,
+        "plugins": 1,
         "gsd_core": "1.5.0",
         "graphify": true
       },
