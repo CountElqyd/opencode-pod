@@ -51,3 +51,10 @@
   - README.md Profiles section: paragraph on the `toml` block, diff/prompt/recreate flow, decline semantics, update version-gate independence, non-TTY behavior.
   - profiles/README.md: `profile.json` table row updated; new "Declaring toml requirements" section with JSON example, v1 allowlist table, legacy `network` alias (toml wins), recreate/destructive warning.
   - Verified semantics against lib/profiles.sh (allowlist keys, rc 3 decline on install aborts / update warns, rc 1 non-TTY install aborts / update warns, rc 2 recreate).
+
+### v0.4.0 release prep
+
+- CHANGELOG.md [0.4.0] entry added (2026-08-12) covering 40 commits since the 0.3.1 release base (a436b56..HEAD): autonomous profile + /autocode, declarative toml profile requirements, security hardening, bug fixes, refactor, tests, docs.
+- VERSION + SCRIPT_VERSION (opencode-pod:7) + README badge bumped 0.3.1 -> 0.4.0 (were uncommitted working-tree edits; now in the release commit).
+- FIXED pre-existing bug in .github/workflows/release.yml:35: awk range `/^## \[V\]/,/^## \[/` collapses to 1 line (awk treats `\[` as literal `[`, end pattern matches start line), so `head -n -2` yielded EMPTY release notes for every release. Replaced with flag-based extraction (`/^## \[V\]/ {found=1; next} found && /^## \[/ {exit} found`); verified 27-line body for 0.4.0.
+- Single release commit b439777 "chore: release v0.4.0" touching CHANGELOG.md, VERSION, opencode-pod, README.md, .github/workflows/release.yml.
