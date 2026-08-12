@@ -752,3 +752,94 @@ _fake_resolve() {
   parsed="$(python3 -c 'import tomllib; print(tomllib.load(open("test.toml","rb"))["env"]["A"])')"
   [ "$parsed" = 'a"b\c' ]
 }
+
+# --- _apply_toml_requirements ---
+
+@test "_apply_toml_requirements no-op when no deltas" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network]\nmode = "host"\n' > opencode-pod.toml
+  podman() { printf '%s\n' "$*" > "$TESTDIR/podman_called"; return 0; }
+  export -f podman
+  run _apply_toml_requirements '{"network":"host"}'
+  [ "$status" -eq 0 ]
+  [ ! -f "$TESTDIR/podman_called" ]
+}
+
+@test "_apply_toml_requirements hard-errors non-TTY on delta" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  _interactive() { return 1; }
+  export -f _interactive
+  run _apply_toml_requirements '{"network":"host"}'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"without a terminal"* ]]
+  grep -q 'mode = "bridge"' opencode-pod.toml
+}
+
+@test "_apply_toml_requirements applies and recreates on accepted delta" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  _interactive() { return 0; }
+  read() { RESPONSE="y"; }
+  container_destroy() { printf 'destroy\n' >> "$TESTDIR/flow"; }
+  container_setup() { printf 'setup\n' >> "$TESTDIR/flow"; }
+  podman() {
+    if [[ "$*" == "start"* ]]; then printf 'start\n' >> "$TESTDIR/flow"; return 0; fi
+    return 0
+  }
+  export -f _interactive read container_destroy container_setup podman
+  run _apply_toml_requirements '{"network":"host"}'
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"[network.mode]"* ]]
+  [[ "$output" == *"host"* ]]
+  grep -q 'mode = "host"' opencode-pod.toml
+  local flow
+  flow="$(cat "$TESTDIR/flow")"
+  [[ "$flow" == *"destroy"* ]]
+  [[ "$flow" == *"setup"* ]]
+  [[ "$flow" == *"start"* ]]
+}
+
+@test "_apply_toml_requirements declined leaves toml unchanged and returns 3" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  _interactive() { return 0; }
+  read() { RESPONSE="n"; }
+  container_destroy() { printf 'destroy\n' >> "$TESTDIR/flow"; }
+  export -f _interactive read container_destroy
+  run _apply_toml_requirements '{"network":"host"}'
+  [ "$status" -eq 3 ]
+  grep -q 'mode = "bridge"' opencode-pod.toml
+  [ ! -f "$TESTDIR/flow" ]
+}
+
+@test "_apply_toml_requirements rejects invalid block before prompting" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  _interactive() { printf 'SHOULD NOT BE CALLED\n' > "$TESTDIR/interactive_called"; return 0; }
+  export -f _interactive
+  run _apply_toml_requirements '{"toml":{"bogus":{"x":"y"}}}'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Unknown toml requirement section"* ]]
+  [ ! -f "$TESTDIR/interactive_called" ]
+  grep -q 'mode = "bridge"' opencode-pod.toml
+}
+
+@test "_apply_toml_requirements recreate failure returns 1" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n' > opencode-pod.toml
+  _interactive() { return 0; }
+  read() { RESPONSE="y"; }
+  container_destroy() { return 0; }
+  container_setup() { return 1; }
+  export -f _interactive read container_destroy container_setup
+  run _apply_toml_requirements '{"network":"host"}'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"recreate failed"* ]]
+}

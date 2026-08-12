@@ -204,7 +204,7 @@ _toml_set() {
   local sec_pat key_pat hdr
   sec_pat='^\[[^]]+\][[:space:]]*(#.*)?$'
   key_pat="^${key_esc}[[:space:]]*="
-  while IFS= read -r line; do
+  while IFS= builtin read -r line; do
     if [[ "$line" =~ $sec_pat ]]; then
       if $pending; then
         printf '%s = "%s"\n' "$key" "$value_esc" >> "$tmp"
@@ -243,6 +243,63 @@ _toml_set() {
     chmod --reference="$file" "$tmp"
   fi
   mv "$tmp" "$file"
+}
+
+# Apply a profile's declared toml requirements to opencode-pod.toml.
+# Exit codes: 0 = no change needed/applied; 1 = hard error (invalid block,
+# non-TTY, or recreate failure); 2 = deltas applied (+ container recreated);
+# 3 = deltas existed but the user declined.
+# v1 allowlist is entirely recreate-class, so any applied delta recreates.
+# Usage: _apply_toml_requirements <profile_json>
+_apply_toml_requirements() {
+  local profile_json="$1"
+  local req deltas
+
+  req="$(_declared_toml_requirements "$profile_json")" || return 1
+  [[ -z "$req" || "$req" == "{}" ]] && return 0
+
+  req="$(_validate_toml_requirements "$req")" || return 1
+
+  deltas="$(_toml_deltas "$req")"
+  [[ -z "$deltas" ]] && return 0
+
+  if ! _interactive; then
+    printf 'Error: profile toml requirements cannot be applied without a terminal.\n' >&2
+    printf '  Run interactively to confirm container changes.\n' >&2
+    return 1
+  fi
+
+  printf 'Profile requires the following opencode-pod.toml changes:\n'
+  while IFS=$'\t' builtin read -r section key curval newval; do
+    printf '  [%s.%s]: %s -> %s\n' "$section" "$key" "${curval:-<absent>}" "$newval"
+  done <<< "$deltas"
+
+  printf 'Apply and recreate the container? [y/N]: '
+  local RESPONSE
+  read -r RESPONSE
+  if [[ ! "$RESPONSE" =~ ^[yY] ]]; then
+    return 3
+  fi
+
+  while IFS=$'\t' builtin read -r section key curval newval; do
+    _toml_set "opencode-pod.toml" "$section" "$key" "$newval"
+  done <<< "$deltas"
+
+  printf '  Destroying container...\n'
+  container_destroy || true
+  CONTAINER_STATE="nonexistent"
+  printf '  Recreating container...\n'
+  container_setup || {
+    printf 'Error: Container recreate failed.\n' >&2
+    return 1
+  }
+  podman start "$CONTAINER_NAME" || {
+    printf 'Error: Failed to start recreated container.\n' >&2
+    return 1
+  }
+  sleep 1
+  CONTAINER_STATE="running"
+  return 2
 }
 
 _profile_registry_path() {
