@@ -695,3 +695,15 @@ _fake_resolve() {
   awk '/^\[/ {sec=$0} /^mode = / {print sec}' test.toml | grep -q '\[network\]'
   grep -q 'user = "dev"' test.toml
 }
+
+@test "_toml_set updates key in non-last section without duplicate" {
+  source "$BATS_TEST_DIRNAME/../lib/profiles.sh"
+  cd "$TESTDIR"
+  printf '[network]\nmode = "bridge"\n[volume]\nuser = "dev"\n' > test.toml
+  run _toml_set test.toml network mode host
+  [ "$status" -eq 0 ]
+  [ "$(grep -c '^mode = ' test.toml)" -eq 1 ]
+  grep -q 'mode = "host"' test.toml
+  grep -q 'user = "dev"' test.toml
+  python3 -c 'import tomllib; tomllib.load(open("test.toml", "rb"))'
+}

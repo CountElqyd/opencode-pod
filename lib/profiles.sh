@@ -210,6 +210,7 @@ _toml_set() {
     if $in_section && [[ "$line" =~ $key_pat ]]; then
       printf '%s = "%s"\n' "$key" "$value" >> "$tmp"
       wrote=true
+      pending=false
       continue
     fi
     printf '%s\n' "$line" >> "$tmp"
