@@ -44,16 +44,18 @@
     },
     {
       "name": "autonomous",
-      "version": "0.2.1",
+      "version": "0.2.3",
       "description": "Autonomous execution profile — GSD-Core + Graphify + curated superpowers skills (debug, verify, review). No fabric-mcp.",
       "path": "profiles/autonomous/",
       "author": "opencode-pod",
       "components": {
-        "skills": 4,
+        "skills": 6,
+        "commands": 3,
+        "plugins": 1,
         "gsd_core": "1.5.0",
         "graphify": true
       },
-      "sha256": "5fec7448edf287f531efb9341bff0fb251b44a549df8316b68470eeb2a58e2d7",
+      "sha256": "89c26842b6befcda9d69ffe4813f064a950a3a0a71cd5b0966589192f122536f",
       "requires": [
         "nodejs",
         "npm",

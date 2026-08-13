@@ -58,3 +58,30 @@
 - VERSION + SCRIPT_VERSION (opencode-pod:7) + README badge bumped 0.3.1 -> 0.4.0 (were uncommitted working-tree edits; now in the release commit).
 - FIXED pre-existing bug in .github/workflows/release.yml:35: awk range `/^## \[V\]/,/^## \[/` collapses to 1 line (awk treats `\[` as literal `[`, end pattern matches start line), so `head -n -2` yielded EMPTY release notes for every release. Replaced with flag-based extraction (`/^## \[V\]/ {found=1; next} found && /^## \[/ {exit} found`); verified 27-line body for 0.4.0.
 - Single release commit b439777 "chore: release v0.4.0" touching CHANGELOG.md, VERSION, opencode-pod, README.md, .github/workflows/release.yml.
+
+## Plan: Graphify skill bump to 0.9.41 (docs/plans/2026-08-13-graphify-skill-bump.md)
+
+**Status:** COMPLETE — skill refreshed to 0.9.41 (byte-identical from upstream tag),
+graphifyy pinned `==0.9.41` in setup.sh (mirrors GSD pin), regression guard added,
+release bumped to v0.2.3 with rebuilt tarball + refreshed sha256.
+
+### Key decisions
+
+- Skill and package pinned in lockstep (Option B) — the version alarm is resolved
+  permanently, not suppressed. Future graphify upgrades refresh skill + pin + mocks together.
+- Task 8 smoke fully verified in scratch container: `/new-project` built 47 nodes /
+  57 edges / 8 communities; plugin reminder fired; `graphify query "hello function"`
+  answered from graph; `/setup-project` re-run was idempotent (incremental --update,
+  no changes, hooks/AGENTS/memory all already in place).
+- FM2 observed: `graphify` not on PATH in a fresh bash call (fell back to
+  `python -m graphify`); documented, not fixed — hook embeds interpreter path.
+- Branch kept local; no merge/push.
+
+### Open items
+
+- USER: remove the smoke container `opencode-pod-personal-blog-9a4783` (Exited;
+  confirmed as the graphify scratch container). Workspace dir
+  `/tmp/opencode/scratch-graphify` already deleted; `opencode-pod destroy` path
+  no longer usable (`podman rm -f opencode-pod-personal-blog-9a4783`).
+- USER: run `opencode-pod profile update autonomous` AFTER the release reaches
+  remote `main` (it fetches from GitHub, not the local repo).

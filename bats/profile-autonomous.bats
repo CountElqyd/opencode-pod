@@ -7,7 +7,7 @@ setup_file() {
   rm -f "$TESTDIR/src/config/gsd-config.json"
   echo "0.1.0" > "$TESTDIR/VERSION"
   tar czf "$TESTDIR/autonomous.tar.gz" \
-    -C "$TESTDIR/src" config/ skills/ agents/ commands/ \
+    -C "$TESTDIR/src" config/ skills/ agents/ commands/ plugins/ \
     -C "$TESTDIR" VERSION
 }
 
@@ -57,7 +57,7 @@ teardown() {
   mkdir -p "$mockdir/payload/foo"
   cat > "$mockdir/payload/foo/uv" <<'SCRIPT'
 #!/usr/bin/env bash
-if [[ "$1" == "tool" && "$2" == "install" && "$3" == "graphifyy" ]]; then
+if [[ "$1" == "tool" && "$2" == "install" && "$3" == "graphifyy==0.9.41" ]]; then
   mkdir -p "$HOME/.local/bin"
   printf '#!/usr/bin/env bash\necho graphify 0.1.0\n' > "$HOME/.local/bin/graphify"
   chmod +x "$HOME/.local/bin/graphify"
@@ -123,7 +123,7 @@ SCRIPT
   cat > "$mockdir/uv" <<'SCRIPT'
 #!/usr/bin/env bash
 echo "uv called: $*" >> "$mockdir/uv-call.log"
-if [[ "$1" == "tool" && "$2" == "install" && "$3" == "graphifyy" ]]; then
+if [[ "$1" == "tool" && "$2" == "install" && "$3" == "graphifyy==0.9.41" ]]; then
   mkdir -p "$HOME/.local/bin"
   printf '#!/usr/bin/env bash\necho graphify 0.1.0\n' > "$HOME/.local/bin/graphify"
   chmod +x "$HOME/.local/bin/graphify"
@@ -289,7 +289,7 @@ assert m.get('network') == 'host', m
 import json
 data = json.load(open('$BATS_TEST_DIRNAME/../profiles/index.json'))
 p = [x for x in data['profiles'] if x['name'] == 'autonomous'][0]
-assert p['version'] == '0.2.1', p
+assert p['version'] == '0.2.3', p
 "
   python3 -c "
 import hashlib, json, os, tarfile
@@ -304,4 +304,86 @@ with tarfile.open(tarball, 'r:gz') as tf:
     version = tf.extractfile('VERSION').read().decode().strip()
 assert version == p['version'], ('VERSION mismatch', version, p['version'])
 "
+}
+
+@test "graphify workflow artifacts are present in src" {
+  local base="$BATS_TEST_DIRNAME/../profiles/autonomous/src"
+  [ -f "$base/skills/graphify/SKILL.md" ]
+  [ -d "$base/skills/graphify/references" ]
+  [ -f "$base/skills/superpowers/context-management/SKILL.md" ]
+  [ -f "$base/commands/new-project.md" ]
+  [ -f "$base/commands/setup-project.md" ]
+  [ -f "$base/plugins/graphify.js" ]
+  grep -q 'graphify query' "$base/commands/new-project.md"
+  grep -q 'Graphify First' "$base/commands/setup-project.md"
+}
+
+@test "setup-project deep-mode is deterministic, not interactive" {
+  local cmd="$BATS_TEST_DIRNAME/../profiles/autonomous/src/commands/setup-project.md"
+  [ -f "$cmd" ]
+  grep -q 'ASK the user' "$cmd" && return 1
+  grep -q 'mode deep' "$cmd"
+  grep -q '\$ARGUMENTS' "$cmd"
+}
+
+@test "setup.sh installs plugins into .config/opencode/plugins" {
+  local profiledir mockdir
+  profiledir="$(mktemp -d)"
+  cp "$BATS_TEST_DIRNAME_TARBALL/autonomous.tar.gz" "$profiledir/autonomous.tar.gz"
+  cp "$BATS_TEST_DIRNAME/../profiles/autonomous/setup.sh" "$profiledir/setup.sh"
+  chmod +x "$profiledir/setup.sh"
+
+  mockdir="$(mktemp -d)"
+  cat > "$mockdir/uv" <<'SCRIPT'
+#!/usr/bin/env bash
+if [[ "$1" == "tool" && "$2" == "install" && "$3" == "graphifyy==0.9.41" ]]; then
+  mkdir -p "$HOME/.local/bin"
+  printf '#!/usr/bin/env bash\necho graphify 0.1.0\n' > "$HOME/.local/bin/graphify"
+  chmod +x "$HOME/.local/bin/graphify"
+fi
+exit 0
+SCRIPT
+  chmod +x "$mockdir/uv"
+  cat > "$mockdir/npx" <<'SCRIPT'
+#!/usr/bin/env bash
+exit 0
+SCRIPT
+  chmod +x "$mockdir/npx"
+  command() {
+    if [[ "$*" == *"graphify"* ]]; then
+      return 1
+    fi
+    builtin command "$@"
+  }
+  export -f command
+  export mockdir
+
+  PATH="$mockdir:$PATH" run bash "$profiledir/setup.sh"
+  [ "$status" -eq 0 ]
+  [ -f "$HOME/.config/opencode/plugins/graphify.js" ]
+  rm -rf "$profiledir" "$mockdir"
+}
+
+@test "autonomous profile components reflect graphify workflow" {
+  python3 -c "
+import json
+m = json.load(open('$BATS_TEST_DIRNAME/../profiles/autonomous/profile.json'))
+c = m['components']
+assert c['skills'] == 6, c
+assert c['commands'] == 3, c
+assert c['plugins'] == 1, c
+"
+}
+
+@test "ported graphify skill retains command-coupled surface" {
+  local skill="$BATS_TEST_DIRNAME/../profiles/autonomous/src/skills/graphify/SKILL.md"
+  local hooks="$BATS_TEST_DIRNAME/../profiles/autonomous/src/skills/graphify/references/hooks.md"
+  [ -f "$skill" ]
+  [ -f "$hooks" ]
+  grep -q -- '--update' "$skill"
+  grep -q -- '--mode deep' "$skill"
+  grep -q 'graphify query' "$skill"
+  grep -q 'graphify-out/graph.json' "$skill"
+  grep -q 'references/hooks.md' "$skill"
+  grep -q 'graphify hook install' "$hooks"
 }
