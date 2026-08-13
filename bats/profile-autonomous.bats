@@ -57,7 +57,7 @@ teardown() {
   mkdir -p "$mockdir/payload/foo"
   cat > "$mockdir/payload/foo/uv" <<'SCRIPT'
 #!/usr/bin/env bash
-if [[ "$1" == "tool" && "$2" == "install" && "$3" == "graphifyy" ]]; then
+if [[ "$1" == "tool" && "$2" == "install" && "$3" == "graphifyy==0.9.41" ]]; then
   mkdir -p "$HOME/.local/bin"
   printf '#!/usr/bin/env bash\necho graphify 0.1.0\n' > "$HOME/.local/bin/graphify"
   chmod +x "$HOME/.local/bin/graphify"
@@ -123,7 +123,7 @@ SCRIPT
   cat > "$mockdir/uv" <<'SCRIPT'
 #!/usr/bin/env bash
 echo "uv called: $*" >> "$mockdir/uv-call.log"
-if [[ "$1" == "tool" && "$2" == "install" && "$3" == "graphifyy" ]]; then
+if [[ "$1" == "tool" && "$2" == "install" && "$3" == "graphifyy==0.9.41" ]]; then
   mkdir -p "$HOME/.local/bin"
   printf '#!/usr/bin/env bash\necho graphify 0.1.0\n' > "$HOME/.local/bin/graphify"
   chmod +x "$HOME/.local/bin/graphify"
@@ -373,4 +373,15 @@ assert c['skills'] == 6, c
 assert c['commands'] == 3, c
 assert c['plugins'] == 1, c
 "
+}
+
+@test "ported graphify skill retains command-coupled surface" {
+  local skill="$BATS_TEST_DIRNAME/../profiles/autonomous/src/skills/graphify/SKILL.md"
+  [ -f "$skill" ]
+  grep -q -- '--update' "$skill"
+  grep -q -- '--code-only' "$skill"
+  grep -q -- '--mode deep' "$skill"
+  grep -q 'graphify hook install' "$skill"
+  grep -q 'graphify query' "$skill"
+  grep -q 'graphify-out/graph.json' "$skill"
 }

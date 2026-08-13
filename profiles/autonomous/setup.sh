@@ -96,6 +96,7 @@ grep -qs '\.local/bin' "$HOME/.zshenv" 2>/dev/null || {
 . "$HOME/.zshenv"
 
 # ---- Install Graphify CLI ----
+GRAPHIFY_VERSION="0.9.41"
 UV_BIN="$HOME/.local/bin/uv"
 if command -v graphify &>/dev/null; then
   echo "  Graphify: already installed ($(graphify --version 2>/dev/null || echo 'unknown'))"
@@ -108,7 +109,7 @@ else
   fi
   if command -v uv &>/dev/null; then
     echo "  Graphify: installing via uv..."
-    uv tool install graphifyy || {
+    uv tool install "graphifyy==${GRAPHIFY_VERSION}" || {
       echo "  Warning: graphifyy install failed" >&2
     }
   else
