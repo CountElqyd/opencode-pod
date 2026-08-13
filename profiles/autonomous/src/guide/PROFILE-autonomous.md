@@ -42,11 +42,10 @@ detection), `--timeout 4h`, `--prepare-only`, `--skip-prepare`.
 
 - `~/.config/opencode/opencode.json` — hardened permission model + providers:
   `deepseek-v4-flash-free` (default) and `ollama` (local, `http://localhost:11434/v1`).
-- `~/.config/opencode/gsd-config.json` — GSD tuning: `tdd_mode: true`,
-  `use_worktrees: false`, `quality_gates: off`, and the injected superpowers
-  skills on `gsd-executor` via `agent_skills`.
 - `/workspace/.planning/config.json` — GSD project config seeded at install
-  (non-clobbering — existing file is kept).
+  (non-clobbering — existing file is kept) with the profile's GSD tuning:
+  `tdd_mode: true`, `use_worktrees: false`, `quality_gates: off`, and the
+  injected superpowers skills on `gsd-executor` via `agent_skills`.
 - `~/.config/opencode/skills/superpowers/` — the curated superpowers skills.
 - `~/.config/opencode/command/` — `/autocode`, `/new-project`, `/setup-project`.
 - `~/.local/bin/graphify` — the Graphify CLI (installed via `uv`).
