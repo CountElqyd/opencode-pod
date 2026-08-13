@@ -336,7 +336,7 @@ assert version == p['version'], ('VERSION mismatch', version, p['version'])
   mockdir="$(mktemp -d)"
   cat > "$mockdir/uv" <<'SCRIPT'
 #!/usr/bin/env bash
-if [[ "$1" == "tool" && "$2" == "install" && "$3" == "graphifyy" ]]; then
+if [[ "$1" == "tool" && "$2" == "install" && "$3" == "graphifyy==0.9.41" ]]; then
   mkdir -p "$HOME/.local/bin"
   printf '#!/usr/bin/env bash\necho graphify 0.1.0\n' > "$HOME/.local/bin/graphify"
   chmod +x "$HOME/.local/bin/graphify"
