@@ -289,7 +289,7 @@ assert m.get('network') == 'host', m
 import json
 data = json.load(open('$BATS_TEST_DIRNAME/../profiles/index.json'))
 p = [x for x in data['profiles'] if x['name'] == 'autonomous'][0]
-assert p['version'] == '0.2.2', p
+assert p['version'] == '0.2.3', p
 "
   python3 -c "
 import hashlib, json, os, tarfile
