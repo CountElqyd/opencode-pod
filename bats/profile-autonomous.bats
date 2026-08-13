@@ -377,11 +377,13 @@ assert c['plugins'] == 1, c
 
 @test "ported graphify skill retains command-coupled surface" {
   local skill="$BATS_TEST_DIRNAME/../profiles/autonomous/src/skills/graphify/SKILL.md"
+  local hooks="$BATS_TEST_DIRNAME/../profiles/autonomous/src/skills/graphify/references/hooks.md"
   [ -f "$skill" ]
+  [ -f "$hooks" ]
   grep -q -- '--update' "$skill"
-  grep -q -- '--code-only' "$skill"
   grep -q -- '--mode deep' "$skill"
-  grep -q 'graphify hook install' "$skill"
   grep -q 'graphify query' "$skill"
   grep -q 'graphify-out/graph.json' "$skill"
+  grep -q 'references/hooks.md' "$skill"
+  grep -q 'graphify hook install' "$hooks"
 }
