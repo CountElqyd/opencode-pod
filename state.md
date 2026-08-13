@@ -79,7 +79,9 @@ release bumped to v0.2.3 with rebuilt tarball + refreshed sha256.
 
 ### Open items
 
-- USER: cleanup scratch container: `podman rm -f opencode-pod-scratch-graphify-*`
-  (or `opencode-pod destroy` in the scratch dir).
+- USER: remove the smoke container `opencode-pod-personal-blog-9a4783` (Exited;
+  confirmed as the graphify scratch container). Workspace dir
+  `/tmp/opencode/scratch-graphify` already deleted; `opencode-pod destroy` path
+  no longer usable (`podman rm -f opencode-pod-personal-blog-9a4783`).
 - USER: run `opencode-pod profile update autonomous` AFTER the release reaches
   remote `main` (it fetches from GitHub, not the local repo).
