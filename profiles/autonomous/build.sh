@@ -28,7 +28,7 @@ trap 'rm -rf "$TMPDIR"' EXIT
 echo "$VERSION" > "$TMPDIR/VERSION"
 
 tar cf - --sort=name --owner=0 --group=0 --mtime="@0" \
-  -C "$SRC_DIR" config/ skills/ agents/ commands/ plugins/ \
+  -C "$SRC_DIR" config/ skills/ agents/ commands/ plugins/ guide/ \
   -C "$TMPDIR" VERSION | gzip -n > "$OUTPUT"
 
 echo "Created: $OUTPUT ($(du -h "$OUTPUT" | cut -f1))"
