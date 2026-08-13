@@ -1,5 +1,34 @@
 # Session State
 
+## Plan: Profile workspace guides (docs/plans/2026-08-13-profile-guide.md)
+
+**Status:** COMPLETE — Tasks 1-7 implemented + whole-branch reviewed (APPROVED), full suite 208/208 bats passing, determinism verified. Branch: `feat/profile-guides` (local, no merge per user choice). Task 8 smoke-test steps 3-5 are USER-RUN (podman/rm permission-blocked).
+
+### Deliverables (commits 889b4ec..d9aac3c on feat/profile-guides)
+
+- `profiles/{ralph,swarm,autonomous}/src/guide/PROFILE-<name>.md` — authored workspace guides (10-section skeleton, no component counts per design).
+- `build.sh` (×3): pack `guide/` into each tarball. `setup.sh` (×3): guide-copy step before the idempotency guard — `[ ! -f /workspace/PROFILE-<name>.md ] || [ "$INSTALLED" != "$VERSION" ]`, non-fatal on failure, restore-on-delete.
+- `profiles/index.json`: versions bumped ralph 0.2.2→0.2.3, swarm 0.1.0→0.1.1, autonomous 0.2.3→0.2.4; tarballs rebuilt; sha256 refreshed. No CLI VERSION/SCRIPT_VERSION bump.
+- `.github/workflows/test.yml` + `bats/profiles.bats`: tarball guide-presence checks. `bats/profile-swarm.bats`/`profile-autonomous.bats`: version assertions updated to 0.1.1/0.2.4.
+- `profiles/README.md`: Convention table row for `src/guide/`.
+
+### Deviations from the plan (reviewed)
+
+1. **Autonomous guide GSD-config bullet** (quality review) — plan said `~/.config/opencode/gsd-config.json` exists, but setup.sh copies gsd-config.json only to `/workspace/.planning/config.json`. Merged into one accurate `/workspace/.planning/config.json` bullet (90e544b).
+2. **Version-assertion bats tests** (full-suite failure) — two pre-existing tests hardcoded pre-bump versions (swarm 0.1.0, autonomous 0.2.3); the plan didn't enumerate them. Updated (d9aac3c). Plan gap resolved inline.
+3. **mktemp-under-set-e known limitation** — if `/workspace` were unwritable, `mktemp` would abort the install; `[ -d /workspace ]` is the only precondition. Out-of-contract (plan assumes writable /workspace). Documented, not fixed.
+
+### Verified
+
+- Full suite `bats bats/` = 208/208 passing (incl. new guide test).
+- Tarball determinism: rebuild yields byte-identical tarballs (git diff empty).
+- Whole-branch review: member path ↔ tarball member ↔ index sha256 consistent for all three profiles; no scope creep; no secrets/artifacts.
+
+### Open items
+
+- USER: Task 8 smoke test (scratch container): install profile → PROFILE-<name>.md appears; KEEP-OK (edits survive same-version reinstall); RESTORE-OK (delete + reinstall restores). Then clean up scratch container.
+- USER: branch `feat/profile-guides` is local-only; merge/push when ready.
+
 ## Plan: Declarative toml requirements (docs/plans/2026-08-11-toml-requirements.md)
 
 **Status:** COMPLETE — all 7 tasks implemented, all 33 steps checked in plan.md, full suite 200/200 bats passing. Branch: `feat/add-autonomous-profile`.
