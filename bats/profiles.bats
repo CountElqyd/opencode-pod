@@ -1039,3 +1039,12 @@ _fake_resolve() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"bare identifier"* ]]
 }
+
+@test "profile tarballs ship their workspace guide" {
+  local profile
+  for profile in ralph swarm autonomous; do
+    run tar tzf "$BATS_TEST_DIRNAME/../profiles/$profile/$profile.tar.gz"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"guide/PROFILE-$profile.md"* ]]
+  done
+}

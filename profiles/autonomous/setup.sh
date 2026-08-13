@@ -28,6 +28,21 @@ fi
 VERSION=$(tar xzOf "$TARBALL" VERSION 2>/dev/null || echo "0.0.0")
 INSTALLED=$(cat "$HOME/.autonomous-version" 2>/dev/null || echo "0.0.0")
 
+# ---- Copy profile guide to workspace (restores deleted guides; overwrites on upgrade) ----
+if [ -d /workspace ]; then
+  GUIDE_DST="/workspace/PROFILE-autonomous.md"
+  if [ ! -f "$GUIDE_DST" ] || [ "$INSTALLED" != "$VERSION" ]; then
+    GUIDE_TMP="$(mktemp /workspace/.PROFILE-autonomous.md.XXXXXX)"
+    if tar xzOf "$TARBALL" guide/PROFILE-autonomous.md > "$GUIDE_TMP" 2>/dev/null; then
+      mv "$GUIDE_TMP" "$GUIDE_DST"
+      echo "  Guide: $GUIDE_DST written"
+    else
+      rm -f "$GUIDE_TMP"
+      echo "  Warning: failed to write profile guide to /workspace" >&2
+    fi
+  fi
+fi
+
 if [ "$INSTALLED" = "$VERSION" ]; then
   echo "Autonomous profile v$VERSION already installed"
   exit 0

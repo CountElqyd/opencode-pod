@@ -15,6 +15,7 @@ Each profile directory contains:
 | `<name>.tar.gz` | Yes | Packaged profile source: VERSION + `src/` contents (built by `build.sh`) |
 | `profile.json` | No | Local metadata; may declare a `toml` block of required `opencode-pod.toml` values (see below). `profiles/index.json` is the canonical registry |
 | `src/` | Yes | Editable source files that `build.sh` packs into the tarball |
+| `src/guide/PROFILE-<name>.md` | No | Workspace guide copied to `/workspace/PROFILE-<name>.md` by `setup.sh` on install/update (non-clobbering per version) |
 
 `VERSION` is **not** a standalone file. Each profile's version is declared in
 `profiles/index.json`. `build.sh` reads it from there and injects a `VERSION`

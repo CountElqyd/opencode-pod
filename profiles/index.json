@@ -3,7 +3,7 @@
   "profiles": [
     {
       "name": "ralph",
-      "version": "0.2.2",
+      "version": "0.2.3",
       "description": "Autonomous coding profile — Superpowers, GSD (Goal-Driven Development), G-Stack (CEO/Eng/Design review pipeline), and Fabric MCP analysis. 123 skills, 37 agents, 69 commands for end-to-end autonomous development sessions.",
       "path": "profiles/ralph/",
       "author": "Ralph",
@@ -14,7 +14,7 @@
         "fabric_mcp": true,
         "gsd_core": "1.5.0"
       },
-      "sha256": "017147d570c024263f9005b02ae030f681d6249ae3198e9589f49e8a5eab26c5",
+      "sha256": "29283ced06ea24fded81ace435127e2aa97c5e7040c7709a033bd209412663a4",
       "requires": [
         "nodejs",
         "npm",
@@ -25,7 +25,7 @@
     },
     {
       "name": "swarm",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "description": "Verification-gated, architect-led multi-agent development — OpenCode Swarm plugin. 18 agents, gated QA pipeline, built-in SAST.",
       "path": "profiles/swarm/",
       "author": "opencode-pod",
@@ -35,7 +35,7 @@
         "commands": 30,
         "plugin": "opencode-swarm"
       },
-      "sha256": "8a14373bc7286f3bb37a6fc685947d0c83af49c06278c78c765257f1c0e213b7",
+      "sha256": "08e1bfbbd6aca8a25a8bb2d4260953896c662cd57ee4c08780131566337a56f0",
       "requires": [
         "nodejs",
         "npm"
@@ -44,7 +44,7 @@
     },
     {
       "name": "autonomous",
-      "version": "0.2.3",
+      "version": "0.2.4",
       "description": "Autonomous execution profile — GSD-Core + Graphify + curated superpowers skills (debug, verify, review). No fabric-mcp.",
       "path": "profiles/autonomous/",
       "author": "opencode-pod",
@@ -55,7 +55,7 @@
         "gsd_core": "1.5.0",
         "graphify": true
       },
-      "sha256": "89c26842b6befcda9d69ffe4813f064a950a3a0a71cd5b0966589192f122536f",
+      "sha256": "53504f9704a96172a0ba3502f7fd29bc6b0486b48a2fde99462bf7d8fec8139a",
       "requires": [
         "nodejs",
         "npm",

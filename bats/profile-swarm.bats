@@ -87,14 +87,14 @@ assert data['mutation_testing'] == False
 
 # --- VERSION consistency ---
 
-@test "index.json version is 0.1.0 for swarm" {
+@test "index.json version is 0.1.1 for swarm" {
   python3 -c "
 import json
 with open('$BATS_TEST_DIRNAME/../profiles/index.json') as f:
     idx = json.load(f)
 for entry in idx['profiles']:
     if entry['name'] == 'swarm':
-        assert entry['version'] == '0.1.0', 'index.json version mismatch'
+        assert entry['version'] == '0.1.1', 'index.json version mismatch'
         break
 else:
     assert False, 'swarm not found in index.json'

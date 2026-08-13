@@ -27,6 +27,11 @@ jobs:
               echo "Error: $tarball is invalid"
               exit 1
             }
+            profile=$(basename "$(dirname "$tarball")")
+            tar tzf "$tarball" "guide/PROFILE-${profile}.md" >/dev/null 2>&1 || {
+              echo "Error: $tarball missing guide/PROFILE-${profile}.md"
+              exit 1
+            }
           done
 
   unit-tests:
