@@ -14,6 +14,7 @@ _container_exec_setup() {
   local tarball_url="$2"
   local setup_url="$3"
   local expected_sha256="${4:-}"
+  local user="${CONTAINER_USER:-dev}"
 
   local host_tmp
   host_tmp="$(mktemp -d)"
@@ -41,14 +42,27 @@ _container_exec_setup() {
   fi
 
   local container_tmp="/tmp/.opencode-profile-${name}"
-  podman exec "$CONTAINER_NAME" mkdir -p "$container_tmp"
-  podman cp "$host_tmp/${name}.tar.gz" "$CONTAINER_NAME:${container_tmp}/"
-  podman cp "$host_tmp/setup.sh" "$CONTAINER_NAME:${container_tmp}/"
 
-  podman exec -u dev "$CONTAINER_NAME" sh -c "
-    cd '$container_tmp'
-    chmod +x setup.sh
-    bash setup.sh
+  # Heal stale root-owned staging dirs from pre-0.4.1 versions: container root
+  # can unlink its own files in sticky /tmp without capabilities.
+  podman exec -u 0 "$CONTAINER_NAME" rm -rf "$container_tmp" 2>/dev/null || true
+
+  # Stage via stdin as the target user so every file is user-owned by
+  # construction. The container has zero capabilities (--cap-drop=ALL), so
+  # in-container chown is impossible and podman cp would land root-owned
+  # files the user cannot chmod (EPERM) or remove (EACCES).
+  podman exec -i -u "$user" "$CONTAINER_NAME" sh -c "mkdir -p '$container_tmp' && tar xzf - -C '$container_tmp'" < "$host_tmp/${name}.tar.gz" || {
+    printf 'Error: Failed to stage profile tarball for %s\n' "$name" >&2
+    return 1
+  }
+  podman exec -i -u "$user" "$CONTAINER_NAME" sh -c "cat > '$container_tmp/setup.sh'" < "$host_tmp/setup.sh" || {
+    printf 'Error: Failed to stage profile setup for %s\n' "$name" >&2
+    return 1
+  }
+
+  podman exec -u "$user" "$CONTAINER_NAME" sh -c "
+    set -e
+    bash '$container_tmp/setup.sh'
     rm -rf '$container_tmp'
   "
 }

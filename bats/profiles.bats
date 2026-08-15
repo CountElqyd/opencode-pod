@@ -227,13 +227,13 @@ _fake_resolve() {
   _load_registry() { printf '{"format_version":1,"profiles":[]}'; }
   _save_registry() { :; }
   _fetch_index() { printf '{"format_version":2,"profiles":[{"name":"ralph","version":"1.0.0","description":"Test","components":{},"network":""}]}'; }
-  podman() { printf '%s\n' "$*" > "$TESTDIR/podman_called"; return 0; }
+  podman() { printf '%s\n' "$*" >> "$TESTDIR/podman_calls"; return 0; }
   sha256sum() { printf 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  -\n'; }
   curl() {
     touch "$TESTDIR/curl_called"
     case "$*" in
-      *ralph.tar.gz*) touch "$3" ;;
-      *setup.sh*)      touch "$3" ;;
+      *ralph.tar.gz*) touch "$4" ;;
+      *setup.sh*)      touch "$4" ;;
     esac
     return 0
   }
@@ -243,15 +243,17 @@ _fake_resolve() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"installed"* ]]
   [[ "$output" == *"1.0.0"* ]]
-  local podman_args
-  podman_args="$(cat "$TESTDIR/podman_called")"
-  [[ "$podman_args" == *"exec"* ]]
-  [[ "$podman_args" == *"-u dev"* ]]
-  [[ "$podman_args" == *"opencode-pod-test-abc123"* ]]
-  [[ "$podman_args" == *"setup.sh"* ]]
-  [[ "$podman_args" == *"/tmp/.opencode-profile-ralph"* ]]
-  # curl is now called directly on the host (not through podman exec)
-  [[ -f "$TESTDIR/curl_called" ]]
+  local calls
+  calls="$(cat "$TESTDIR/podman_calls")"
+  [[ "$calls" == *"exec -u 0 opencode-pod-test-abc123 rm -rf /tmp/.opencode-profile-ralph"* ]]
+  [[ "$calls" == *"exec -i -u dev opencode-pod-test-abc123 sh -c"* ]]
+  [[ "$calls" == *"tar xzf - -C '/tmp/.opencode-profile-ralph'"* ]]
+  [[ "$calls" == *"cat > '/tmp/.opencode-profile-ralph/setup.sh'"* ]]
+  [[ "$calls" == *"set -e"* ]]
+  [[ "$calls" == *"bash '/tmp/.opencode-profile-ralph/setup.sh'"* ]]
+  [[ "$calls" == *"rm -rf '/tmp/.opencode-profile-ralph'"* ]]
+  ! grep -q '^cp ' "$TESTDIR/podman_calls"
+  ! grep -q 'chmod' "$TESTDIR/podman_calls"
 }
 
 
@@ -400,7 +402,7 @@ _fake_resolve() {
   }
   python3() { command python3 "$@"; }
   sha256sum() { printf 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  -\n'; }
-  curl() { touch "$TESTDIR/curl_called"; return 0; }
+  curl() { touch "$TESTDIR/curl_called"; touch "$4"; return 0; }
   export -f resolve_project _load_registry _save_registry _fetch_index _interactive read container_destroy container_setup podman python3 sha256sum curl _fake_resolve
   run cmd_profile_update "ralph"
   [ "$status" -eq 0 ]
@@ -430,7 +432,7 @@ _fake_resolve() {
   }
   python3() { command python3 "$@"; }
   sha256sum() { printf 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  -\n'; }
-  curl() { touch "$TESTDIR/curl_called"; return 0; }
+  curl() { touch "$TESTDIR/curl_called"; touch "$4"; return 0; }
   export -f resolve_project _load_registry _save_registry _fetch_index _interactive read container_destroy container_setup podman python3 sha256sum curl _fake_resolve
   run cmd_profile_update "ralph"
   [ "$status" -eq 0 ]
@@ -452,7 +454,7 @@ _fake_resolve() {
   podman() { printf '%s\n' "$*" > "$TESTDIR/podman_called"; return 0; }
   python3() { command python3 "$@"; }
   sha256sum() { printf 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  -\n'; }
-  curl() { touch "$TESTDIR/curl_called"; return 0; }
+  curl() { touch "$TESTDIR/curl_called"; touch "$4"; return 0; }
   export -f resolve_project _load_registry _save_registry _fetch_index _interactive read podman python3 sha256sum curl _fake_resolve
   run cmd_profile_update "ralph"
   [ "$status" -eq 0 ]
@@ -472,7 +474,7 @@ _fake_resolve() {
   podman() { printf '%s\n' "$*" > "$TESTDIR/podman_called"; return 0; }
   python3() { command python3 "$@"; }
   sha256sum() { printf 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  -\n'; }
-  curl() { touch "$TESTDIR/curl_called"; return 0; }
+  curl() { touch "$TESTDIR/curl_called"; touch "$4"; return 0; }
   export -f resolve_project _load_registry _save_registry _fetch_index _interactive podman python3 sha256sum curl _fake_resolve
   run cmd_profile_update "ralph"
   [ "$status" -eq 0 ]
@@ -495,7 +497,7 @@ _fake_resolve() {
   podman() { printf '%s\n' "$*" > "$TESTDIR/podman_called"; return 0; }
   python3() { command python3 "$@"; }
   sha256sum() { printf 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  -\n'; }
-  curl() { touch "$TESTDIR/curl_called"; return 0; }
+  curl() { touch "$TESTDIR/curl_called"; touch "$4"; return 0; }
   export -f resolve_project _load_registry _save_registry _fetch_index _interactive read container_destroy container_setup podman python3 sha256sum curl _fake_resolve
   run cmd_profile_install "ralph"
   [ "$status" -eq 0 ]
