@@ -51,7 +51,10 @@ _container_exec_setup() {
   # construction. The container has zero capabilities (--cap-drop=ALL), so
   # in-container chown is impossible and podman cp would land root-owned
   # files the user cannot chmod (EPERM) or remove (EACCES).
-  podman exec -i -u "$user" "$CONTAINER_NAME" sh -c "mkdir -p '$container_tmp' && tar xzf - -C '$container_tmp'" < "$host_tmp/${name}.tar.gz" || {
+  # The tarball is staged as a file (not extracted): every profile's
+  # setup.sh expects $SCRIPT_DIR/<name>.tar.gz to exist and extracts it
+  # itself. 0.4.1 extracted at staging time, which made that check fail.
+  podman exec -i -u "$user" "$CONTAINER_NAME" sh -c "mkdir -p '$container_tmp' && cat > '$container_tmp/${name}.tar.gz'" < "$host_tmp/${name}.tar.gz" || {
     printf 'Error: Failed to stage profile tarball for %s\n' "$name" >&2
     return 1
   }

@@ -247,7 +247,7 @@ _fake_resolve() {
   calls="$(cat "$TESTDIR/podman_calls")"
   [[ "$calls" == *"exec -u 0 opencode-pod-test-abc123 rm -rf /tmp/.opencode-profile-ralph"* ]]
   [[ "$calls" == *"exec -i -u dev opencode-pod-test-abc123 sh -c"* ]]
-  [[ "$calls" == *"tar xzf - -C '/tmp/.opencode-profile-ralph'"* ]]
+  [[ "$calls" == *"cat > '/tmp/.opencode-profile-ralph/ralph.tar.gz'"* ]]
   [[ "$calls" == *"cat > '/tmp/.opencode-profile-ralph/setup.sh'"* ]]
   [[ "$calls" == *"set -e"* ]]
   [[ "$calls" == *"bash '/tmp/.opencode-profile-ralph/setup.sh'"* ]]
