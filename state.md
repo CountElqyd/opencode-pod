@@ -1,5 +1,37 @@
 # Session State
 
+## Plan: Profile install permissions fix (docs/plans/2026-08-15-profile-install-permissions.md)
+
+**Status:** COMPLETE — Tasks 1-5 implemented via subagent-driven-development (implementer + spec review + quality review per task), whole-branch reviewed (APPROVED), full suite 216/216 bats passing, shellcheck 0.11.0 clean (via npx), `validate-version.sh` exit 0. Branch: `feat/update` (local; no merge per repo pattern). Task 5 Step 4 (real-podman smoke test) is USER-RUN.
+
+### Deliverables (commits 30c6cee..24a79fc on feat/update)
+
+- `lib/profiles.sh` — `_container_exec_setup` rewritten: stage tarball + setup.sh into the container via `podman exec -i -u "${CONTAINER_USER:-dev}"` stdin (user-owned by construction — fixes EPERM/EACCES with `--cap-drop=ALL`/no-CAP_CHOWN); root (`-u 0`) pre-cleanup `rm -rf` self-heals stale root-owned staging dirs from pre-0.4.1; `set -e` in the run step.
+- `bats/profiles.bats` — `cmd_profile_install success execs setup inside container` rewritten to assert the new sequence (exec -u 0 cleanup, exec -i -u dev stdin staging, `tar xzf - -C`, `cat >`, `set -e`, `rm -rf`, no `cp`, no `chmod`).
+- `README.md` — profile section replaced with full "Installing a Profile" guide (prereqs, quick start, install mechanics, `opencode-pod list` vs `profile list` disambiguation, profile table ralph 0.2.3 / swarm 0.1.1 / autonomous 0.2.4, toml-requirements paragraph).
+- `opencode-pod`/`VERSION`/`README.md` badge/`CHANGELOG.md` — bumped to 0.4.1. CHANGELOG 0.4.1 section includes an APPROVED extension covering unreleased commits #28 (graphify workflow), #29 (profile guides + version bumps), #30 (`list` command + destroy fix in config-less dirs).
+- `known-issues.md` — updated on disk (new EPERM/EACCES symptom entry under `## Configuration`; hardcode `-u dev` entry marked fixed in 0.4.1) but deliberately NOT committed: the file is gitignored (`.gitignore:13`, added a436b56) and was never tracked. USER DECISION: keep local-only.
+
+### Deviations from the plan (all reviewed + approved)
+
+1. **curl mock `$3` → `$4`** (Task 1, plan test body had a latent bug): the spec's own invocation `curl -sS --fail -o PATH URL` puts the output path at `$4` (`-o` is `$3`); `touch "$3"` = `touch -o` → staged file never existed, breaking the new stdin redirect `< file`. Old code was unaffected because `podman cp` was mocked. Fix required for the specified test+implementation pair to pass.
+2. **5 neighboring curl mocks extended with `touch "$4"`** (Task 1): toml-delta/update/install tests' `curl(){ touch "$TESTDIR/curl_called"; return 0; }` didn't create the staged file → new stdin redirect failed fast. Same-file, minimal, required for mandated full-suite PASS.
+3. **CHANGELOG 0.4.1 extension** (Task 4): plan's verbatim CHANGELOG body omitted unreleased commits #28/#29/#30 (graphify workflow, profile guides, `list` command + destroy fix) that ship inside 0.4.1 — release notes would have been incomplete (incl. the new `list` command the README documents). USER DECISION: extend notes (added `### Features` section + third Bug Fix bullet). Version stays 0.4.1 (patch bump kept per plan + user).
+4. **Task 2 commit step N/A**: `known-issues.md` is gitignored/untracked; plan assumed tracked. USER DECISION: keep local-only (see above).
+
+### Verified
+
+- Full suite `npx bats bats/` = 216/216 passing (exit 0).
+- `npx --yes shellcheck opencode-pod lib/*.sh` = clean (exit 0, shellcheck 0.11.0).
+- `bash scripts/validate-version.sh` = exit 0; diff stat = 6 tracked files (CHANGELOG.md, README.md, VERSION, bats/profiles.bats, lib/profiles.sh, opencode-pod) + known-issues.md on disk.
+- Whole-branch review: APPROVED. 3 Low/informational findings, none gating: (L1) `--force re-installs` test has no curl mock → real network dependency (pre-existing, out of scope); (L2) `set -e` skips cleanup on setup.sh failure → user-owned leftover, self-heals next run (plan-mandated); (L3) root pre-cleanup swallows container-not-running error → callers guarantee started container.
+- Security verified: no hardening changes (`--cap-drop=ALL`/`--userns=keep-id` intact), no capability dependency, no injection vector (profile name validated `^[a-zA-Z0-9_-]+$`, `container_tmp` fixed-format, user passed as separate argv).
+
+### Open items
+
+- USER: Task 5 Step 4 smoke test — on a host with podman + a stale root-owned `/tmp/.opencode-profile-*` dir, run `opencode-pod profile install --force autonomous`; expect no EPERM/EACCES, ends with installed message, staging dir gone after.
+- USER: branch `feat/update` is local-only; tag/publish/release.sh are separate (not part of this plan).
+
 ## Plan: Profile workspace guides (docs/plans/2026-08-13-profile-guide.md)
 
 **Status:** COMPLETE — Tasks 1-7 implemented + whole-branch reviewed (APPROVED), full suite 208/208 bats passing, determinism verified. Branch: `feat/profile-guides` (local, no merge per user choice). Task 8 smoke-test steps 3-5 are USER-RUN (podman/rm permission-blocked).
