@@ -74,3 +74,11 @@ teardown() {
   [ "$status" -eq 0 ]
   [ "$output" = "$uid1" ]
 }
+
+@test "[integration] container_list shows the created container with project label" {
+  run container_list
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"$CONTAINER_NAME"* ]]
+  [[ "$output" == *"$WORKDIR/project"* ]]
+}

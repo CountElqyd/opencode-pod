@@ -14,22 +14,22 @@ resolve_project() {
   project_dir="$(pwd)"
 
   local config_file="$project_dir/opencode-pod.toml"
+  local raw_name
 
   if [[ ! -f "$config_file" ]]; then
     auto_detect_profile "$project_dir"
-    return 0
+    raw_name=""
+  else
+    unset CONFIG_CONTAINER_IMAGE CONFIG_CONTAINER_USER CONFIG_CONTAINER_NAME 2>/dev/null || true
+    parse_toml "$config_file" || return 1
+
+    CONTAINER_IMAGE="${CONFIG_CONTAINER_IMAGE:-}"
+    CONTAINER_USER="${CONFIG_CONTAINER_USER:-dev}"
+
+    raw_name="${CONFIG_CONTAINER_NAME:-}"
   fi
 
-  unset CONFIG_CONTAINER_IMAGE CONFIG_CONTAINER_USER CONFIG_CONTAINER_NAME 2>/dev/null || true
-  parse_toml "$config_file" || return 1
-
-  CONTAINER_IMAGE="${CONFIG_CONTAINER_IMAGE:-}"
-  CONTAINER_USER="${CONFIG_CONTAINER_USER:-dev}"
-
-  local raw_name
-  if [[ -n "${CONFIG_CONTAINER_NAME:-}" ]]; then
-    raw_name="$CONFIG_CONTAINER_NAME"
-  else
+  if [[ -z "$raw_name" ]]; then
     raw_name="$(basename "$project_dir")"
   fi
   raw_name="$(printf '%s' "$raw_name" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-')"
@@ -380,6 +380,7 @@ container_create() {
   local -a args=()
   args+=(create)
   args+=(--name "$CONTAINER_NAME")
+  args+=(--label "opencode-pod.project=$(pwd)")
   args+=(--volume "${HOME_VOLUME}:/home/dev")
   args+=(--volume "$(pwd):/workspace:Z")
   args+=(--userns=keep-id)
@@ -510,4 +511,42 @@ container_destroy() {
     rm -f "$(_profile_registry_path)" 2>/dev/null || true
   fi
   printf '%s\n' "Container, home volume, and profile registry removed."
+}
+
+container_list() {
+  if ! command -v podman >/dev/null 2>&1; then
+    classify_error "podman_not_found" 0 ""
+    return 1
+  fi
+
+  local rows
+  rows="$(podman ps -a --filter name='^opencode-pod-' --format '{{.Names}}\t{{.State}}\t{{.Label "opencode-pod.project"}}\t{{.CreatedAt}}' 2>/dev/null)" || {
+    printf '%s\n' "Error: could not list opencode-pod containers." >&2
+    return 1
+  }
+
+  if [[ -z "$rows" ]]; then
+    printf '%s\n' "No opencode-pod containers found."
+    return 0
+  fi
+
+  printf '%-50s %-12s %-40s %s\n' 'NAME' 'STATE' 'PROJECT' 'CREATED'
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    local name="${line%%$'\t'*}"
+    local rest="${line#*$'\t'}"
+    local state="${rest%%$'\t'*}"
+    rest="${rest#*$'\t'}"
+    local project="${rest%%$'\t'*}"
+    local created="${rest#*$'\t'}"
+    local marker=""
+    if [[ -n "$project" ]]; then
+      if [[ ! -f "$project/opencode-pod.toml" ]]; then
+        marker=" [orphan]"
+      fi
+    else
+      project="?"
+    fi
+    printf '%-50s %-12s %-40s %s\n' "$name" "$state" "${project}${marker}" "$created"
+  done <<< "$rows"
 }

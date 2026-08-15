@@ -44,6 +44,7 @@ Each project gets a rootless Podman container with a persistent home volume. You
 | Suspend (preserve tools) | `opencode-pod stop` | Container pauses, home volume intact |
 | Resume a stopped project | `opencode-pod start` | Same command — idempotent |
 | Check current container state | `opencode-pod status` | Shows container name, state, project path, image |
+| List all containers | `opencode-pod list` | All opencode-pod containers, with project path and `[orphan]` markers |
 | Health check + diagnostics | `opencode-pod doctor` | Checks Podman, rootless mode, image, disk space |
 | Refresh tools | `opencode-pod upgrade` | Pulls fresh image if 30+ days old, syncs missing packages from config |
 | Manage environment profiles | `opencode-pod profile list\|info\|install\|update <name>` | Fetch/share reusable configs |
