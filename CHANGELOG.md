@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.1] - 2026-08-15
+
+### Bug Fixes
+- Profile install/update: staging via `podman cp` left root-owned files the container user cannot chmod (EPERM) or remove (EACCES) — every install reported failure after a successful setup. Files are now streamed into the container as the target user (no `chmod`, no `podman cp`, no capability dependency), with a root pre-cleanup that self-heals stale staging dirs
+- Profile install/update: `podman exec` user parameterized (`CONTAINER_USER`), no longer hardcoded `-u dev`
+
+### Documentation
+- README: profile install guide (prereqs, quick start, built-in profile table, `list` vs `profile list`); known-issues entries for the EPERM/EACCES fix
+
 ## [0.4.0] - 2026-08-12
 
 ### Features
