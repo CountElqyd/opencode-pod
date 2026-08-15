@@ -77,20 +77,32 @@ When no config exists, `opencode-pod start` auto-detects your project type and i
 
 All profiles include `zsh`, `bash`, `vim`, and `libstdc++`.
 
-### Reusable Environment Profiles
+### Installing a Profile
 
-Share and install pre-packaged OpenCode environments (skills, agents, config, tooling) from the project's GitHub repo:
+Reusable OpenCode environments (skills, agents, commands, config, tooling) are packaged as profiles and published with this repo. Install one into your container with `profile install`:
 
 ```sh
-opencode-pod profile list                 # list available profiles
-opencode-pod profile info ralph           # show details
-opencode-pod profile install ralph        # download + install inside container
-opencode-pod profile update ralph         # re-download latest
+opencode-pod profile list                 # available profiles (fetched from GitHub)
+opencode-pod profile info autonomous      # details, components, requirements
+opencode-pod profile install autonomous   # download + install inside the container
+opencode-pod profile update autonomous    # re-download and reinstall the latest
 ```
 
-`install` and `update` fetch the profile from GitHub and run setup inside the container automatically. Profiles can be committed to your repo (pinning a version for the team) or gitignored (each developer installs independently). See [`profiles/README.md`](profiles/README.md) for the convention and how to create custom profiles.
+Prerequisite: the container must exist first — run `opencode-pod setup` once before installing a profile.
 
-Profiles can additionally declare required `opencode-pod.toml` values via a `toml` block in `profile.json` (e.g. `{"network": {"mode": "host"}}`). `install` and `update` diff the declared values against your active config and — when anything changed — prompt once for confirmation, then apply the delta by destroying and recreating the container (the profile is reinstalled by the same command). Declining the prompt cancels `install`; `update` warns and continues. The requirements are synced on every `update`, even when the profile version is unchanged. Run interactively: a pending change in a non-interactive session aborts `install` (and warns on `update`). See [`profiles/README.md`](profiles/README.md) for the schema and allowlist.
+On install, the CLI fetches the profile index, tarball, and `setup.sh` from GitHub, stages them inside the container **as the container user**, and runs the profile's installer. Skills, agents, commands, and plugins land in `~/.config/opencode/`; a `PROFILE-<name>.md` guide is written to `/workspace`; the installed version is recorded. Re-running `install` is a no-op (idempotent); `profile update` reinstalls the latest version; `--force` forces a reinstall.
+
+After installing, `opencode-pod start` drops you into the profile's environment. Use `opencode-pod list` to see all your containers (name, state, project, `[orphan]` markers) — don't confuse it with `profile list`, which lists available profiles — and `status` for the active project.
+
+| Profile | Version | Network | Description |
+|---------|---------|---------|-------------|
+| `ralph` | 0.2.3 | host | Superpowers + GSD + G-Stack + Fabric MCP — 123 skills, 37 agents, 69 commands |
+| `swarm` | 0.1.1 | bridge | OpenCode Swarm plugin — 18 agents, gated QA pipeline, built-in SAST |
+| `autonomous` | 0.2.4 | host | GSD-Core + Graphify + curated superpowers skills — zero-interruption autonomous sessions |
+
+Versions drift — run `opencode-pod profile list` for the current set.
+
+Profiles can declare required `opencode-pod.toml` values via a `toml` block in `profile.json` (e.g. `network: host`). `install` and `update` diff the declared values against your active config and — when anything changed — prompt once for confirmation, then apply the delta by destroying and recreating the container (the profile is reinstalled by the same command). Declining the prompt cancels `install`; `update` warns and continues. The requirements are synced on every `update`, even when the profile version is unchanged. Run interactively: a pending change in a non-interactive session aborts `install` (and warns on `update`). See [`profiles/README.md`](profiles/README.md) for the schema and how to create custom profiles.
 
 ---
 
