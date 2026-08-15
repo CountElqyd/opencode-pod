@@ -118,6 +118,88 @@ EOF
   [[ "$AUTO_DETECTED_PROFILE" == "nodejs" ]]
 }
 
+@test "resolve_project auto-detect path sets full container identity (no toml)" {
+  mkdir -p "$TESTDIR/project"
+
+  source lib/toml.sh
+  source lib/podman.sh
+  resolve_project "$TESTDIR/project"
+
+  [[ "$CONTAINER_NAME" == opencode-pod-project-* ]]
+  [ "$HOME_VOLUME" = "${CONTAINER_NAME}-home" ]
+  [ "$CONTAINER_STATE" = "nonexistent" ]
+}
+
+@test "container_list adds project label to podman create command" {
+  mkdir -p "$TESTDIR/project"
+  cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
+[container]
+image = "wolfi-base"
+EOF
+
+  source lib/toml.sh
+  source lib/podman.sh
+  resolve_project "$TESTDIR/project"
+
+  podman() { printf '%s\n' "$*" > "$TESTDIR/podman_args"; return 0; }
+  container_create
+
+  local cmd
+  cmd="$(cat "$TESTDIR/podman_args")"
+  [[ "$cmd" == *"--label opencode-pod.project=${TESTDIR}/project"* ]]
+}
+
+@test "container_list queries podman with name filter and format" {
+  source lib/toml.sh
+  source lib/podman.sh
+
+  podman() { printf '%s\n' "$*" > "$TESTDIR/ps_args"; return 0; }
+  container_list
+
+  local args
+  args="$(cat "$TESTDIR/ps_args")"
+  [[ "$args" == *"ps -a"* ]]
+  [[ "$args" == *"--filter name=^opencode-pod-"* ]]
+  [[ "$args" == *"--format"* ]]
+  [[ "$args" == *".Label \"opencode-pod.project\""* ]]
+}
+
+@test "container_list prints no-containers message when empty" {
+  source lib/toml.sh
+  source lib/podman.sh
+
+  podman() { return 0; }
+  run container_list
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"No opencode-pod containers found."* ]]
+}
+
+@test "container_list prints table with orphan markers" {
+  mkdir -p "$TESTDIR/project"
+  touch "$TESTDIR/project/opencode-pod.toml"
+  mkdir -p "$TESTDIR/orphan"
+
+  source lib/toml.sh
+  source lib/podman.sh
+
+  podman() {
+    printf '%b\n' \
+      "opencode-pod-foo-a1b2c3\trunning\t${TESTDIR}/project\t2026-08-01 12:00" \
+      "opencode-pod-orphan-d4e5f6\texited\t${TESTDIR}/orphan\t2026-07-01 10:00" \
+      "opencode-pod-legacy-9f8e7d\texited\t\t2026-07-01 10:00"
+  }
+  run container_list
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'NAME'* ]]
+  [[ "$output" == *"opencode-pod-foo-a1b2c3"* ]]
+  [[ "$output" == *"${TESTDIR}/project"* ]]
+  [[ "$output" == *"[orphan]"* ]]
+  [[ "$output" == *"opencode-pod-legacy-9f8e7d"* ]]
+  [[ "$output" == *"?"* ]]
+}
+
 @test "container_create assembles correct podman create command" {
   mkdir -p "$TESTDIR/project"
   cat > "$TESTDIR/project/opencode-pod.toml" << 'EOF'
