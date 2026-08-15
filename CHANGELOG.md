@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.4.2] - 2026-08-15
+
+### Bug Fixes
+- Profile install/update: the 0.4.1 staging change extracted the profile tarball inside the container (`tar xzf - -C`), but every profile's `setup.sh` expects `$SCRIPT_DIR/<name>.tar.gz` to exist — installs failed with `Error: /tmp/.opencode-profile-<name>/<name>.tar.gz not found`. The tarball is staged as a file again (streamed via stdin as the container user, preserving the 0.4.1 ownership fix); `setup.sh` extracts it itself
+
 ## [0.4.1] - 2026-08-15
 
 ### Features

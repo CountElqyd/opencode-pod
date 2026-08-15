@@ -6,8 +6,8 @@
 
 ### Deliverables (commits 30c6cee..24a79fc on feat/update)
 
-- `lib/profiles.sh` — `_container_exec_setup` rewritten: stage tarball + setup.sh into the container via `podman exec -i -u "${CONTAINER_USER:-dev}"` stdin (user-owned by construction — fixes EPERM/EACCES with `--cap-drop=ALL`/no-CAP_CHOWN); root (`-u 0`) pre-cleanup `rm -rf` self-heals stale root-owned staging dirs from pre-0.4.1; `set -e` in the run step.
-- `bats/profiles.bats` — `cmd_profile_install success execs setup inside container` rewritten to assert the new sequence (exec -u 0 cleanup, exec -i -u dev stdin staging, `tar xzf - -C`, `cat >`, `set -e`, `rm -rf`, no `cp`, no `chmod`).
+- `lib/profiles.sh` — `_container_exec_setup` rewritten: stage tarball + setup.sh into the container via `podman exec -i -u "${CONTAINER_USER:-dev}"` stdin (user-owned by construction — fixes EPERM/EACCES with `--cap-drop=ALL`/no-CAP_CHOWN); root (`-u 0`) pre-cleanup `rm -rf` self-heals stale root-owned staging dirs from pre-0.4.1; `set -e` in the run step. **0.4.2 regression fix:** the tarball is staged as a file (`cat > <name>.tar.gz`), not extracted (`tar xzf - -C`), restoring the `$SCRIPT_DIR/<name>.tar.gz` contract every setup.sh relies on.
+- `bats/profiles.bats` — `cmd_profile_install success execs setup inside container` rewritten to assert the sequence (exec -u 0 cleanup, exec -i -u dev stdin staging, `cat > <name>.tar.gz`, `cat > setup.sh`, `set -e`, `rm -rf`, no `cp`, no `chmod`).
 - `README.md` — profile section replaced with full "Installing a Profile" guide (prereqs, quick start, install mechanics, `opencode-pod list` vs `profile list` disambiguation, profile table ralph 0.2.3 / swarm 0.1.1 / autonomous 0.2.4, toml-requirements paragraph).
 - `opencode-pod`/`VERSION`/`README.md` badge/`CHANGELOG.md` — bumped to 0.4.1. CHANGELOG 0.4.1 section includes an APPROVED extension covering unreleased commits #28 (graphify workflow), #29 (profile guides + version bumps), #30 (`list` command + destroy fix in config-less dirs).
 - `known-issues.md` — updated on disk (new EPERM/EACCES symptom entry under `## Configuration`; hardcode `-u dev` entry marked fixed in 0.4.1) but deliberately NOT committed: the file is gitignored (`.gitignore:13`, added a436b56) and was never tracked. USER DECISION: keep local-only.
@@ -29,8 +29,12 @@
 
 ### Open items
 
-- USER: Task 5 Step 4 smoke test — on a host with podman + a stale root-owned `/tmp/.opencode-profile-*` dir, run `opencode-pod profile install --force autonomous`; expect no EPERM/EACCES, ends with installed message, staging dir gone after.
+- USER: Task 5 Step 4 smoke test — on a host with podman + a stale root-owned `/tmp/.opencode-profile-*` dir, run `opencode-pod profile install --force autonomous`; expect no EPERM/EACCES, ends with installed message, staging dir gone after. **Note:** the first run of this smoke test (2026-08-15) exposed a 0.4.1 regression — see 0.4.2 fix below.
 - USER: branch `feat/update` is local-only; tag/publish/release.sh are separate (not part of this plan).
+
+## Fix: 0.4.1 staging regression — `autonomous.tar.gz not found` (0.4.2)
+
+**Status:** COMPLETE — root cause: 0.4.1 `_container_exec_setup` staged the tarball via `tar xzf - -C` (extracted contents), but every profile's `setup.sh` requires `$SCRIPT_DIR/<name>.tar.gz` to exist and exits 1 (`Error: /tmp/.opencode-profile-<name>/<name>.tar.gz not found`). Old `podman cp` flow placed the tarball as a file; setup.sh extracted it. Staging + setup.sh were never tested together (bats mocks podman; setup.sh bats tests place the tarball beside it). Fix: stage the tarball as a file via stdin (`cat >`), preserving the 0.4.1 ownership fix. Files: lib/profiles.sh (staging), bats/profiles.bats (assertion), opencode-pod SCRIPT_VERSION + VERSION + CHANGELOG → 0.4.2.
 
 ## Plan: Profile workspace guides (docs/plans/2026-08-13-profile-guide.md)
 
