@@ -2,9 +2,15 @@
 
 ## [0.4.1] - 2026-08-15
 
+### Features
+- `opencode-pod list`: shows all opencode-pod containers (name, state, project, `[orphan]` markers); `destroy` now works in directories without an `opencode-pod.toml`
+- Autonomous profile: graphify workflow — `/new-project` and `/setup-project` commands, graphify + context-management skills, graphify plugin
+- Profile installs write a `PROFILE-<name>.md` guide to `/workspace`; profile versions bumped (ralph 0.2.3, swarm 0.1.1, autonomous 0.2.4)
+
 ### Bug Fixes
 - Profile install/update: staging via `podman cp` left root-owned files the container user cannot chmod (EPERM) or remove (EACCES) — every install reported failure after a successful setup. Files are now streamed into the container as the target user (no `chmod`, no `podman cp`, no capability dependency), with a root pre-cleanup that self-heals stale staging dirs
 - Profile install/update: `podman exec` user parameterized (`CONTAINER_USER`), no longer hardcoded `-u dev`
+- `destroy` in a directory without an `opencode-pod.toml` previously failed; it now works (and `list` shows `[orphan]` containers)
 
 ### Documentation
 - README: profile install guide (prereqs, quick start, built-in profile table, `list` vs `profile list`); known-issues entries for the EPERM/EACCES fix
