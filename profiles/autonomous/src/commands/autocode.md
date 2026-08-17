@@ -1,5 +1,5 @@
 ---
-description: Launch a fire-and-forget autonomous GSD run in-session from a gstack-reviewed design doc.
+description: Launch a fire-and-forget autonomous GSD run in-session from an approved design artifact (anchors the topic's full design package).
 argument-hint: "[design-doc] [--from N] [--to N] [--only N] [--watch] [--timeout 4h] [--prepare-only] [--skip-prepare]"
 effort: max
 requires: [phase, progress]
@@ -13,7 +13,7 @@ tools:
   agent: true
 ---
 <objective>
-Run a fire-and-forget autonomous GSD run in the current opencode session. The input is a gstack-reviewed design doc (already approved — do NOT run gstack review). Execute GSD's `/gsd-autonomous` against it, resolving every decision point through `autocode-decider` instead of asking the user. NEVER call the `question` tool. Stop only when the milestone lifecycle completes, the timeout fires, or a hard blocker cannot be resolved by policy.
+Run a fire-and-forget autonomous GSD run in the current opencode session. The input is an approved design artifact (already approved — do NOT run gstack review) that anchors the topic's full design package: design doc, gstack review verdicts, brainstorming spec, and writing-plans tasks. Execute GSD's `/gsd-autonomous` against it, resolving every decision point through `autocode-decider` instead of asking the user. NEVER call the `question` tool. Stop only when the milestone lifecycle completes, the timeout fires, or a hard blocker cannot be resolved by policy.
 </objective>
 
 <context>

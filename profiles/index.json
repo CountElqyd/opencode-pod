@@ -55,7 +55,7 @@
         "gsd_core": "1.5.0",
         "graphify": true
       },
-      "sha256": "302be5e8340dc7d62de74bb92cea838d0321cb0bbf6d3e1c1ce36c7f0d866e48",
+      "sha256": "be4b7292996413e52889fc559b2d83d6eb55b832f0bdb417eecefe3122548aa6",
       "requires": [
         "nodejs",
         "npm",
