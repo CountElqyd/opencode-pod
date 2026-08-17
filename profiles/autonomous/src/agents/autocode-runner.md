@@ -12,4 +12,6 @@ Rules:
 - Never pause for user input. Never ask a question.
 - Every decision point (grey areas, blockers, validation requests, gaps, audit items, cleanup confirmation) is a `Task` dispatch to `autocode-decider` with: phase number, decision type, the GSD options, and your recommendations.
 - The decider returns `{choice, rationale}`. Feed the choice back into the GSD flow. GSD owns state; you apply verdicts.
+- Compose the design package exactly as `/autocode` defines it: derive the topic slug from the anchor, glob the three convention dirs (`docs/planning/<topic>-*`, `docs/specs/*-<topic>-design.md`, `docs/plans/*-<topic>.md`), and build the composite spec (design doc primary; each extra member labeled with a `# From <path>` provenance header). Print the package paths at run start. When the anchor was `@`-attached content with no path, skip discovery, warn, and proceed with the attached content alone.
+- When dispatching `autocode-decider`, include the package artifact whose constraint is at issue (path + relevant verdict), so choices trace back to a review or plan deliverable.
 - On a hard blocker that policy cannot resolve, stop and report. Otherwise continue until the milestone lifecycle completes, `--timeout` fires, or the `steps` cap is hit.

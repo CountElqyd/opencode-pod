@@ -15,7 +15,7 @@ approved design doc, or to work with graph-first codebase answering.
 1. Start the container: `opencode-pod start` then `opencode-pod shell`.
 2. Run opencode inside the container.
 3. New project: `/new-project`. Existing project: `/setup-project` (idempotent).
-4. Launch a run: `/autocode docs/planning/design-doc.md`.
+4. Launch a run: `/autocode docs/planning/<topic>-design-doc.md` — or just `/autocode`, which resolves the latest `*-design-doc.md` and auto-discovers the topic's full package (gstack reviews, `docs/specs/*-<topic>-design.md`, `docs/plans/*-<topic>.md`); the whole package feeds both the spec and the prepare pass.
 
 ## Key commands
 
@@ -23,7 +23,7 @@ approved design doc, or to work with graph-first codebase answering.
 |---|---|
 | `/new-project` | Bootstrap a NEW project: graphify graph + freshness hook + AGENTS.md "Graphify First" contract + superpowers memory |
 | `/setup-project` | Configure an EXISTING project idempotently (incremental graph update, append-only contract) |
-| `/autocode <doc>` | Fire-and-forget autonomous GSD run from an approved design doc (see flags below) |
+| `/autocode <doc>` | Fire-and-forget autonomous GSD run from an approved design artifact — auto-discovers the topic's full package (gstack reviews, brainstorming spec, writing-plans tasks) into the spec and prepare pass (see flags below) |
 | `/graphify query "<q>"` | Answer codebase questions from the graph (`--budget 1500`) |
 
 `/autocode` flags: `--from N --to N --only N` (resume/scope), `--watch` (stall
@@ -72,8 +72,8 @@ for all subsequent codebase questions → `code-reviewer`/`red-team` on the resu
 
 ## Troubleshooting
 
-- **`/autocode` aborts: graph is stale** — re-run `graphify build` (or the graph
-  must be newer than the design doc). For `@`-attached docs a stale graph only warns.
+- **`/autocode` aborts: graph is stale** — re-run `graphify build` so `graphify-out/graph.json` is newer than the NEWEST design-package member (design doc, reviews, spec, or plan). For `@`-attached docs a stale graph only warns.
+- **Bare `/autocode` finds nothing** — run `office-hours` (or `brainstorming`) + the gstack reviews first so a `docs/planning/<topic>-design-doc.md` exists, or pass the artifact explicitly: `/autocode docs/plans/2026-08-17-<topic>.md`.
 - **`/autocode` aborts: git identity missing** — set `git config user.name` / `user.email`
   (GSD commits every phase).
 - **Local LLM unreachable** — confirm `network: host` was applied; without it the

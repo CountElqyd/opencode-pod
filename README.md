@@ -98,7 +98,7 @@ After installing, `opencode-pod start` drops you into the profile's environment.
 |---------|---------|---------|-------------|
 | `ralph` | 0.2.3 | host | Superpowers + GSD + G-Stack + Fabric MCP — 123 skills, 37 agents, 69 commands |
 | `swarm` | 0.1.1 | bridge | OpenCode Swarm plugin — 18 agents, gated QA pipeline, built-in SAST |
-| `autonomous` | 0.2.4 | host | GSD-Core + Graphify + curated superpowers skills — zero-interruption autonomous sessions |
+| `autonomous` | 0.2.5 | host | GSD-Core + Graphify + curated superpowers skills — zero-interruption autonomous sessions |
 
 Versions drift — run `opencode-pod profile list` for the current set.
 
