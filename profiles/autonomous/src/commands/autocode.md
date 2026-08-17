@@ -18,7 +18,7 @@ Run a fire-and-forget autonomous GSD run in the current opencode session. The in
 
 <context>
 Flags:
-- `anchor` (required) — the starting design artifact. Resolution priority: (1) `@`-attached reference (content in prompt), (2) positional `anchor-path`, (3) the newest `docs/planning/*-design-doc.md` by mtime (the gstack convention of reading the latest `*-design-doc.md`). The anchor may be ANY package member — design doc, gstack review, brainstorming spec, or writing-plans task — its basename determines the topic slug.
+- `anchor` (required) — the starting design artifact. Resolution priority: (1) `@`-attached reference (content in prompt), (2) positional `anchor-path`, (3) the newest `docs/planning/*-design-doc.md` by mtime (the gstack convention of reading the latest `*-design-doc.md`). The anchor may be ANY package member — design doc, gstack review, brainstorming spec, or writing-plans task. Its topic slug is the basename minus the convention tokens: the `YYYY-MM-DD-` date prefix and the `-design-doc` / `-design` / `-<review-type>-review` suffixes.
 - `--from N` / `--to N` / `--only N` — forwarded to `/gsd-autonomous` (resume/scope controls).
 - `--watch` — poll `git log --oneline -5` and `.planning/STATE.md` between steps; report phase transitions; abort if neither the latest commit nor the STATE.md content/mtime changes for 15 consecutive minutes.
 - `--timeout 4h` — hard stop after the given duration (default 4h).
@@ -31,7 +31,7 @@ Design package: from the topic slug, discover every sibling artifact:
 - `docs/plans/*-<topic>.md` — superpowers writing-plans task plans.
 Date collisions (same topic, multiple dates) resolve to the newest mtime; list discovered package paths in the run-start report. If the anchor resolved from content only (`@`-attach), skip discovery and warn. If the package is only the anchor, proceed with the single doc and note it.
 
-Composite spec: the design doc (or the anchor's design-convention artifact) is the PRIMARY spec — it drives phase generation. Every other member is appended with a provenance header (`# From <path>`): gstack review verdicts are authoritative constraints per domain (CEO scope/priority, Eng architecture/data flow, Design UX), and the plan file's tasks are required deliverables the execution must satisfy.
+Composite spec: the package's design doc (`docs/planning/<topic>-design-doc.md`; fallback: the anchor itself when the package has no design doc) is the PRIMARY spec — it drives phase generation. Every other member is appended with a provenance header (`# From <path>`): gstack review verdicts are authoritative constraints per domain (CEO scope/priority, Eng architecture/data flow, Design UX), and the plan file's tasks are required deliverables the execution must satisfy.
 
 Pipeline:
 1. **Preflight (fail fast).**
