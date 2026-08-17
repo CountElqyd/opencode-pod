@@ -179,12 +179,29 @@ SCRIPT
   grep -q "agent: autocode-runner" "$dir/autocode.md"
 }
 
+@test "autocode discovers design artifact package across conventions" {
+  local dir="$BATS_TEST_DIRNAME/../profiles/autonomous/src/commands"
+  grep -q -- "latest" "$dir/autocode.md"
+  grep -q -- '\*-design-doc.md' "$dir/autocode.md"
+  grep -q -- "docs/specs" "$dir/autocode.md"
+  grep -q -- "docs/plans" "$dir/autocode.md"
+  grep -q -- "package" "$dir/autocode.md"
+  grep -q -- "newest" "$dir/autocode.md"
+  grep -q -- "provenance" "$dir/autocode.md"
+}
+
 @test "autocode-runner forbids question and mandates decider dispatch" {
   local runner="$BATS_TEST_DIRNAME/../profiles/autonomous/src/agents/autocode-runner.md"
   [ -f "$runner" ]
   grep -q 'NEVER call the .question. tool' "$runner"
   grep -q "autocode-decider" "$runner"
   grep -q "{choice, rationale}" "$runner"
+}
+
+@test "autocode-runner composes the design package" {
+  local runner="$BATS_TEST_DIRNAME/../profiles/autonomous/src/agents/autocode-runner.md"
+  grep -q -- "package" "$runner"
+  grep -q -- "provenance" "$runner"
 }
 
 @test "autocode-decider policy table covers all decision types" {
